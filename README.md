@@ -33,7 +33,7 @@ roulettify/
 ├── internal/
 │   ├── server/
 │   │   ├── server.go            # Server initialization
-│   │   └── routes.go            # Chi router + Spotify OAuth handlers
+│   │   └── routes.go            # Gin router + Spotify OAuth handlers
 │   └── auth/
 │       └── spotify.go           # Spotify authentication logic
 ├── frontend/
