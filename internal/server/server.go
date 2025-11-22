@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"roulettify/internal/auth"
+	"roulettify/internal/game"
 
 	_ "github.com/joho/godotenv/autoload"
 )
@@ -15,6 +16,7 @@ import (
 type Server struct {
 	port        int
 	spotifyAuth *auth.SpotifyAuthenticator
+	roomManager *game.RoomManager
 }
 
 func NewServer() *http.Server {
@@ -27,9 +29,13 @@ func NewServer() *http.Server {
 		os.Getenv("SPOTIFY_REDIRECT_URI"),
 	)
 
+	// Initialize game room manager
+	roomManager := game.NewRoomManager()
+
 	NewServer := &Server{
 		port:        port,
 		spotifyAuth: spotifyAuth,
+		roomManager: roomManager,
 	}
 
 	// Declare Server config

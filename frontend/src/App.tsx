@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react'
+import Lobby from './components/Lobby'
+import GameRoom from './components/GameRoom'
 
 interface Player {
   id: string
   name: string
   spotify_id: string
   access_token?: string
+  is_guest?: boolean
 }
 
 function App() {
-  const [count, setCount] = useState(0)
-  const [message, setMessage] = useState<string>('')
   const [player, setPlayer] = useState<Player | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [gameState, setGameState] = useState<'lobby' | 'room'>('lobby')
+  const [roomId, setRoomId] = useState('')
 
   // Helper function to get cookie value
   const getCookie = (name: string): string | null => {
@@ -30,15 +33,10 @@ function App() {
       const urlParams = new URLSearchParams(window.location.search)
       const authSuccess = urlParams.get('auth')
       
-      console.log('URL params:', { authSuccess })
-      
       if (authSuccess === 'success') {
         console.log('Auth success detected, clearing URL...')
-        // Clear URL parameters
         window.history.replaceState({}, document.title, '/')
         
-        // Try to get player data from cookie
-        console.log('All cookies:', document.cookie)
         const playerData = getCookie('player_session')
         console.log('Player session cookie:', playerData)
         
@@ -51,14 +49,14 @@ function App() {
               id: parsed.id,
               name: parsed.name,
               spotify_id: parsed.spotify_id,
+              access_token: parsed.access_token,
+              is_guest: parsed.is_guest || false,
             })
             setIsAuthenticated(true)
             console.log('Authentication state updated!')
           } catch (e) {
             console.error('Failed to parse player data:', e)
           }
-        } else {
-          console.error('No player_session cookie found!')
         }
       }
     }
@@ -66,87 +64,62 @@ function App() {
     checkAuth()
   }, [])
 
-  const fetchData = () => {
-    fetch(`http://localhost:${import.meta.env.VITE_PORT || 8080}/`)
-      .then(response => response.json())
-      .then(data => setMessage(data.message))
-      .catch(error => console.error('Error fetching data:', error))
+  const handleJoinRoom = (room: string) => {
+    setRoomId(room)
+    setGameState('room')
   }
 
-  const handleSpotifyAuth = () => {
-    window.location.href = `http://localhost:${import.meta.env.VITE_PORT || 8080}/auth/spotify`
+  const handleLeaveRoom = () => {
+    setGameState('lobby')
+    setRoomId('')
+  }
+
+  const handleGuestLogin = async (guestIndex: number) => {
+    try {
+      const response = await fetch(`http://localhost:8080/auth/guest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ guest_index: guestIndex }),
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        const parsed = JSON.parse(data.player_data)
+        setPlayer({
+          id: parsed.id,
+          name: parsed.name,
+          spotify_id: parsed.spotify_id,
+          access_token: parsed.access_token,
+          is_guest: true,
+        })
+        setIsAuthenticated(true)
+      }
+    } catch (error) {
+      console.error('Guest login error:', error)
+    }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md mx-auto space-y-8">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            🎵 Roulettify
-          </h1>
-          <p className="text-gray-600">
-            Spotify Multiplayer Music Game
-          </p>
-        </div>
-
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          {!isAuthenticated ? (
-            <div className="text-center space-y-4">
-              <h2 className="text-xl font-semibold text-gray-800">
-                Sign in with Spotify
-              </h2>
-              <p className="text-gray-600 text-sm">
-                Connect your Spotify account to start playing
-              </p>
-              <button
-                onClick={handleSpotifyAuth}
-                className="w-full bg-green-500 hover:bg-green-600 text-white font-semibold py-3 px-4 rounded-md transition-colors"
-              >
-                🎵 Sign in with Spotify
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="text-center">
-                <h2 className="text-xl font-semibold text-gray-800">
-                  Welcome, {player?.name}! ✓
-                </h2>
-                <p className="text-green-600 text-sm mt-2">
-                  Successfully authenticated with Spotify
-                </p>
-              </div>
-              
-              <div className="border-t pt-4">
-                <button
-                  onClick={() => setCount((count) => count + 1)}
-                  className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md transition-colors mb-2"
-                >
-                  Count is {count}
-                </button>
-                
-                <button
-                  onClick={fetchData}
-                  className="w-full bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md transition-colors"
-                >
-                  Fetch from Server
-                </button>
-
-                {message && (
-                  <div className="mt-4 p-4 bg-gray-50 rounded-md">
-                    <p className="text-gray-700 text-sm">Server Response:</p>
-                    <p className="text-gray-900 font-medium">{message}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="text-center text-gray-500 text-sm">
-          <p>Built with Go, React, and Tailwind CSS</p>
-          <p className="mt-2 text-xs">Gin • Spotify API • WebSockets</p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-linear-to-br from-purple-600 via-pink-500 to-red-500">
+      {gameState === 'lobby' ? (
+        <Lobby
+          player={player}
+          isAuthenticated={isAuthenticated}
+          onJoinRoom={handleJoinRoom}
+          onGuestLogin={handleGuestLogin}
+        />
+      ) : (
+        player && (
+          <GameRoom
+            roomId={roomId}
+            player={player}
+            onLeaveRoom={handleLeaveRoom}
+          />
+        )
+      )}
     </div>
   )
 }
