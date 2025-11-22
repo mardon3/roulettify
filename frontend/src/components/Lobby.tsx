@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 
 interface Player {
   id: string
@@ -15,26 +15,26 @@ interface LobbyProps {
 
 export default function Lobby({ player, isAuthenticated, onJoinRoom, onGuestLogin }: LobbyProps) {
   const [roomInput, setRoomInput] = useState('')
-  const [guestIndex, setGuestIndex] = useState(0)
+  const [isJoining, setIsJoining] = useState(false)
+  const guestCounterRef = useRef(0)
 
   const handleSpotifyAuth = () => {
     window.location.href = 'http://localhost:8080/auth/spotify'
   }
 
   const handleGuestClick = () => {
-    onGuestLogin(guestIndex)
-    setGuestIndex(guestIndex + 1)
+    const currentIndex = guestCounterRef.current
+    guestCounterRef.current += 1
+    onGuestLogin(currentIndex)
   }
 
-  const handleCreateRoom = () => {
-    if (roomInput.trim()) {
-      onJoinRoom(roomInput.trim())
-    }
-  }
-
-  const handleJoinRoom = () => {
-    if (roomInput.trim()) {
-      onJoinRoom(roomInput.trim())
+  const handleJoinOrCreateRoom = () => {
+    if (roomInput.trim() && !isJoining) {
+      setIsJoining(true)
+      setTimeout(() => {
+        onJoinRoom(roomInput.trim())
+        setIsJoining(false)
+      }, 300)
     }
   }
 
@@ -111,27 +111,31 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom, onGuestLogi
                   placeholder="Enter room name..."
                   value={roomInput}
                   onChange={(e) => setRoomInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleCreateRoom()}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  onKeyPress={(e) => e.key === 'Enter' && handleJoinOrCreateRoom()}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter any room name to create or join
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={handleCreateRoom}
-                  disabled={!roomInput.trim()}
-                  className="bg-purple-500 hover:bg-purple-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 shadow-md"
-                >
-                  Create Room
-                </button>
-                <button
-                  onClick={handleJoinRoom}
-                  disabled={!roomInput.trim()}
-                  className="bg-pink-500 hover:bg-pink-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-all transform hover:scale-105 shadow-md"
-                >
-                  Join Room
-                </button>
-              </div>
+              <button
+                onClick={handleJoinOrCreateRoom}
+                disabled={!roomInput.trim() || isJoining}
+                className={`w-full font-bold py-4 px-6 rounded-xl transition-all transform shadow-lg ${
+                  !roomInput.trim() || isJoining
+                    ? 'bg-gray-300 cursor-not-allowed'
+                    : 'bg-linear-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 hover:scale-105 text-white'
+                }`}
+              >
+                {isJoining ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="animate-spin">⏳</span> Joining...
+                  </span>
+                ) : (
+                  <span className="text-xl">🚀 Join / Create Room</span>
+                )}
+              </button>
             </div>
           )}
         </div>

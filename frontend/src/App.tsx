@@ -16,7 +16,6 @@ function App() {
   const [gameState, setGameState] = useState<'lobby' | 'room'>('lobby')
   const [roomId, setRoomId] = useState('')
 
-  // Helper function to get cookie value
   const getCookie = (name: string): string | null => {
     const value = `; ${document.cookie}`
     const parts = value.split(`; ${name}=`)
@@ -26,7 +25,6 @@ function App() {
     return null
   }
 
-  // Check for OAuth callback on mount
   useEffect(() => {
     const checkAuth = () => {
       console.log('App mounted, checking for auth...')
@@ -43,8 +41,7 @@ function App() {
         if (playerData) {
           try {
             const parsed = JSON.parse(decodeURIComponent(playerData))
-            
-            console.log('Parsed player data:', parsed)
+          
             setPlayer({
               id: parsed.id,
               name: parsed.name,
@@ -76,6 +73,8 @@ function App() {
 
   const handleGuestLogin = async (guestIndex: number) => {
     try {
+      console.log('Requesting guest login with index:', guestIndex)
+      
       const response = await fetch(`http://localhost:8080/auth/guest`, {
         method: 'POST',
         headers: {
@@ -85,9 +84,12 @@ function App() {
       })
 
       const data = await response.json()
+      console.log('Guest login response:', data)
       
       if (data.success) {
         const parsed = JSON.parse(data.player_data)
+        console.log('Guest player created:', parsed)
+        
         setPlayer({
           id: parsed.id,
           name: parsed.name,
