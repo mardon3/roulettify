@@ -286,7 +286,7 @@ As of Nov 2024, Spotify no longer provides preview URLs via API for new applicat
 
 ## 📊 Performance
 
-- **Memory**: ~50-100MB with 3 persistent rooms
+- **Memory**: 3 persistent rooms
 - **Concurrent Users**: Up to 18 (6 per room)
 - **WebSocket Connections**: Persistent per player
 - **Latency**: <100ms for game actions
