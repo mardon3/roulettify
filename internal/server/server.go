@@ -29,7 +29,7 @@ func NewServer() *http.Server {
 		os.Getenv("SPOTIFY_REDIRECT_URI"),
 	)
 
-	// Initialize game room manager
+	// Initialize game room manager with 3 persistent rooms
 	roomManager := game.NewRoomManager()
 
 	NewServer := &Server{
