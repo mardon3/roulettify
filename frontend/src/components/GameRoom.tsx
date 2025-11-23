@@ -4,13 +4,11 @@ interface Player {
   id: string
   name: string
   access_token?: string
-  is_guest?: boolean
 }
 
 interface PlayerInfo {
   id: string
   name: string
-  is_guest: boolean
   score: number
 }
 
@@ -54,6 +52,8 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
   const [timeRemaining, setTimeRemaining] = useState(30)
   const [isStarting, setIsStarting] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const [audioError, setAudioError] = useState<string | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (hasConnected.current) return
@@ -72,7 +72,6 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
           player_id: player.id,
           player_name: player.name,
           access_token: player.access_token || '',
-          is_guest: player.is_guest || false,
         },
       }))
     }
@@ -105,10 +104,15 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
           setGuessesCount(0)
           setRoundResult(null)
           setTimeRemaining(30)
+          setAudioError(null)
           
           if (message.payload.track.preview_url && audioRef.current) {
             audioRef.current.src = message.payload.track.preview_url
-            audioRef.current.play().catch(err => console.log('Audio play error:', err))
+            audioRef.current.volume = 0.7
+            audioRef.current.play().catch(err => {
+              console.log('Audio play error:', err)
+              setAudioError('Failed to play audio preview')
+            })
           }
           break
 
@@ -139,7 +143,11 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
 
         case 'error':
           console.error('Game error:', message.payload.message)
+          setErrorMessage(message.payload.message)
           setIsStarting(false)
+          
+          // Auto-clear errors after 5 seconds
+          setTimeout(() => setErrorMessage(null), 5000)
           break
       }
     }
@@ -196,6 +204,22 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
     }
   }
 
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    const handleError = (e: Event) => {
+      console.error('Audio error:', e)
+      setAudioError('Failed to load audio preview')
+    }
+
+    audio.addEventListener('error', handleError)
+
+    return () => {
+      audio.removeEventListener('error', handleError)
+    }
+  }, [])
+
   const handleLeave = () => {
     if (wsRef.current) {
       wsRef.current.close()
@@ -207,8 +231,31 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
   const isWinner = gameState === 'game_over' && sortedPlayers[0]?.id === player.id
 
   return (
+      <>
+    <audio
+      ref={audioRef}
+      crossOrigin="anonymous"
+    />
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
+        {errorMessage && (
+          <div className="bg-red-50 border-2 border-red-500 rounded-xl p-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div>
+                <p className="font-bold text-red-900">Error</p>
+                <p className="text-red-700">{errorMessage}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setErrorMessage(null)}
+              className="text-red-500 hover:text-red-700 font-bold text-xl"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+        
         <div className="bg-white rounded-2xl shadow-2xl p-6 mb-6 transition-all">
           <div className="flex justify-between items-center">
             <div>
@@ -260,45 +307,75 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
               </div>
             )}
 
-            {gameState === 'playing' && currentTrack && (
-              <div className="bg-white rounded-2xl shadow-2xl p-8 transition-all">
-                <div className="text-center mb-6">
-                  <div className="inline-block bg-purple-100 px-6 py-2 rounded-full">
-                    <span className="text-purple-800 font-bold">
-                      Round {currentRound} / {totalRounds}
-                    </span>
-                  </div>
-                  <div className="mt-4">
-                    <div className="text-4xl font-bold text-gray-800">
-                      {timeRemaining}s
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                      <div
-                        className="bg-purple-500 h-2 rounded-full transition-all duration-1000"
-                        style={{ width: `${(timeRemaining / 30) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
+    {gameState === 'playing' && currentTrack && (
+      <div className="bg-white rounded-2xl shadow-2xl p-8 transition-all">
+        <div className="text-center mb-6">
+          <div className="inline-block bg-purple-100 px-6 py-2 rounded-full">
+            <span className="text-purple-800 font-bold">
+              Round {currentRound} / {totalRounds}
+            </span>
+          </div>
+          <div className="mt-4">
+            <div className="text-4xl font-bold text-gray-800">
+              {timeRemaining}s
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+              <div
+                className="bg-purple-500 h-2 rounded-full transition-all duration-1000"
+                style={{ width: `${(timeRemaining / 30) * 100}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
 
-                {currentTrack.image_url && (
-                  <img
-                    src={currentTrack.image_url}
-                    alt={currentTrack.name}
-                    className="w-64 h-64 mx-auto rounded-xl shadow-lg mb-6"
-                  />
-                )}
+        {currentTrack.image_url && (
+          <img
+            src={currentTrack.image_url}
+            alt={currentTrack.name}
+            className="w-64 h-64 mx-auto rounded-xl shadow-lg mb-6"
+          />
+        )}
 
-                <div className="text-center mb-6">
-                  <h3 className="text-2xl font-bold text-gray-800">
-                    {currentTrack.name}
-                  </h3>
-                  <p className="text-gray-600">{currentTrack.artists.join(', ')}</p>
-                </div>
+        <div className="text-center mb-6">
+          <h3 className="text-2xl font-bold text-gray-800">
+            {currentTrack.name}
+          </h3>
+          <p className="text-gray-600">{currentTrack.artists.join(', ')}</p>
+        </div>
 
-                {currentTrack.preview_url && (
-                  <audio ref={audioRef} className="w-full mb-6" controls />
-                )}
+        {/* Simple Volume Control */}
+        {currentTrack.preview_url ? (
+          <div className="mb-6 flex items-center justify-center gap-3 bg-gray-100 rounded-lg p-4">
+            <span className="text-gray-600 text-sm">🔊 Volume:</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              defaultValue="0.7"
+              onChange={(e) => {
+                if (audioRef.current) {
+                  audioRef.current.volume = parseFloat(e.target.value)
+                }
+              }}
+              className="w-32"
+            />
+          </div>
+        ) : (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-800 text-center">
+              🔇 No preview available for this track
+            </p>
+          </div>
+        )}
+
+        {audioError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <p className="text-red-800 text-center text-sm">
+              {audioError}
+            </p>
+          </div>
+        )}
 
                 <h4 className="text-xl font-semibold text-gray-800 mb-4 text-center">
                   Who listened to this the most?
@@ -316,7 +393,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                           : 'bg-purple-500 hover:bg-purple-600 text-white hover:scale-105 shadow-lg'
                       }`}
                     >
-                      {p.name} {p.is_guest && '👤'}
+                      {p.name}
                     </button>
                   ))}
                 </div>
@@ -435,7 +512,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                             {idx === 0 ? '👑' : `#${idx + 1}`}
                           </span>
                           <span className="font-semibold text-lg">
-                            {p.name} {p.is_guest && '👤'}
+                            {p.name}
                             {p.id === player.id && ' (You)'}
                           </span>
                         </div>
@@ -466,7 +543,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                   }`}
                 >
                   <span className="font-semibold">
-                    {p.name} {p.is_guest && '👤'}
+                    {p.name}
                     {p.id === player.id && ' (You)'}
                   </span>
                   <span className="text-purple-600 font-bold">{p.score}</span>
@@ -477,5 +554,6 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
         </div>
       </div>
     </div>
+    </>
   )
 }
