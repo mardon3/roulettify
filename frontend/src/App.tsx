@@ -26,16 +26,13 @@ function App() {
 
   useEffect(() => {
     const checkAuth = () => {
-      console.log('App mounted, checking for auth...')
       const urlParams = new URLSearchParams(window.location.search)
       const authSuccess = urlParams.get('auth')
       
       if (authSuccess === 'success') {
-        console.log('Auth success detected, clearing URL...')
         window.history.replaceState({}, document.title, '/')
         
         const playerData = getCookie('player_session')
-        console.log('Player session cookie:', playerData)
         
         if (playerData) {
           try {
@@ -48,7 +45,6 @@ function App() {
               access_token: parsed.access_token,
             })
             setIsAuthenticated(true)
-            console.log('Authentication state updated!')
           } catch (e) {
             console.error('Failed to parse player data:', e)
           }

@@ -63,8 +63,6 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
     wsRef.current = websocket
 
     websocket.onopen = () => {
-      console.log('WebSocket connected')
-      
       websocket.send(JSON.stringify({
         type: 'join_room',
         payload: {
@@ -78,7 +76,6 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
 
     websocket.onmessage = (event) => {
       const message = JSON.parse(event.data)
-      console.log('WebSocket message:', message)
 
       switch (message.type) {
         case 'player_joined':
@@ -109,8 +106,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
           if (message.payload.track.preview_url && audioRef.current) {
             audioRef.current.src = message.payload.track.preview_url
             audioRef.current.volume = 0.7
-            audioRef.current.play().catch(err => {
-              console.log('Audio play error:', err)
+            audioRef.current.play().catch(() => {
               setAudioError('Failed to play audio preview')
             })
           }
@@ -158,7 +154,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
     }
 
     websocket.onclose = () => {
-      console.log('WebSocket disconnected')
+      // WebSocket disconnected
     }
 
     return () => {
@@ -208,8 +204,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
     const audio = audioRef.current
     if (!audio) return
 
-    const handleError = (e: Event) => {
-      console.error('Audio error:', e)
+    const handleError = () => {
       setAudioError('Failed to load audio preview')
     }
 
