@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -38,13 +37,11 @@ func (s *Server) RegisterRoutes() http.Handler {
 	// Basic routes
 	r.GET("/", s.HelloWorldHandler)
 	r.GET("/health", s.HealthCheckHandler)
+	r.GET("/rooms", s.ListRoomsHandler)
 
 	// Spotify OAuth routes
 	r.GET("/auth/spotify", s.HandleSpotifyAuth)
 	r.GET("/auth/callback", s.HandleSpotifyCallback)
-
-	// Guest auth route
-	r.POST("/auth/guest", s.HandleGuestAuth)
 
 	// WebSocket route
 	r.GET("/ws", s.HandleWebSocket)
@@ -65,6 +62,13 @@ func (s *Server) HealthCheckHandler(c *gin.Context) {
 		"status":    "healthy",
 		"timestamp": time.Now().Unix(),
 		"metrics":   metrics,
+	})
+}
+
+func (s *Server) ListRoomsHandler(c *gin.Context) {
+	rooms := s.roomManager.ListRooms()
+	c.JSON(http.StatusOK, gin.H{
+		"rooms": rooms,
 	})
 }
 
@@ -138,7 +142,6 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 		"name":         player.Name,
 		"spotify_id":   player.SpotifyID,
 		"access_token": token.AccessToken,
-		"is_guest":     false,
 	})
 
 	c.SetCookie("oauth_state", "", -1, "/", "", false, true)
@@ -152,36 +155,6 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 	}
 
 	c.Redirect(http.StatusTemporaryRedirect, frontendURL+"/?auth=success")
-}
-
-// HandleGuestAuth creates a guest account
-func (s *Server) HandleGuestAuth(c *gin.Context) {
-	var req struct {
-		GuestIndex int `json:"guest_index"`
-	}
-
-	if err := c.BindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
-		return
-	}
-
-	// Generate mock player
-	player := auth.GenerateMockPlayer(req.GuestIndex)
-
-	log.Printf("Guest player created: %s (ID: %s)", player.Name, player.ID)
-
-	playerJSON, _ := json.Marshal(map[string]interface{}{
-		"id":           player.ID,
-		"name":         player.Name,
-		"spotify_id":   player.SpotifyID,
-		"access_token": player.AccessToken,
-		"is_guest":     true,
-	})
-
-	c.JSON(http.StatusOK, gin.H{
-		"success":      true,
-		"player_data":  string(playerJSON),
-	})
 }
 
 // HandleWebSocket handles WebSocket connections for the game
@@ -235,46 +208,41 @@ func (s *Server) handleJoinRoom(ctx context.Context, conn *websocket.Conn, paylo
 	var joinPayload game.JoinRoomPayload
 	json.Unmarshal(data, &joinPayload)
 
-	// Get or create room
-	room, exists := s.roomManager.GetRoom(joinPayload.RoomID)
-	if !exists {
-		var err error
-		room, err = s.roomManager.CreateRoom(joinPayload.RoomID)
-		if err != nil {
-			log.Printf("Failed to create room: %v", err)
-			return nil, nil
+	// Get persistent room (no creation, only 3 rooms exist)
+	room, err := s.roomManager.GetRoom(joinPayload.RoomID)
+	if err != nil {
+		log.Printf("Failed to get room: %v", err)
+		// Send error to client
+		errorMsg := game.Message{
+			Type: game.MsgTypeError,
+			Payload: map[string]interface{}{
+				"message": err.Error(),
+			},
 		}
+		if sendErr := wsjson.Write(ctx, conn, errorMsg); sendErr != nil {
+			log.Printf("Failed to send error message: %v", sendErr)
+		}
+		return nil, nil
 	}
 
-	// Create player
-	var authPlayer *auth.Player
+	// Create player - fetch real player data from Spotify
+	spotifyClient := s.spotifyAuth.NewClient(ctx, &oauth2.Token{
+		AccessToken: joinPayload.AccessToken,
+	})
 	
-	if joinPayload.IsGuest {
-		// Extract guest index from player ID
-		guestIndex := 0
-		fmt.Sscanf(joinPayload.PlayerID, "guest_%d", &guestIndex)
-		authPlayer = auth.GenerateMockPlayer(guestIndex)
-	} else {
-		// Fetch real player data
-		spotifyClient := s.spotifyAuth.NewClient(ctx, &oauth2.Token{
-			AccessToken: joinPayload.AccessToken,
-		})
-		
-		var err error
-		authPlayer, err = auth.FetchPlayerInfo(ctx, spotifyClient)
-		if err != nil {
-			log.Printf("Failed to fetch player info: %v", err)
-			return nil, nil
-		}
-		
-		tracks, err := auth.FetchPlayerTopTracks(ctx, spotifyClient)
-		if err != nil {
-			log.Printf("Failed to fetch top tracks: %v", err)
-			return nil, nil
-		}
-		authPlayer.TopTracks = tracks
-		authPlayer.AccessToken = joinPayload.AccessToken
+	authPlayer, err := auth.FetchPlayerInfo(ctx, spotifyClient)
+	if err != nil {
+		log.Printf("Failed to fetch player info: %v", err)
+		return nil, nil
 	}
+	
+	tracks, err := auth.FetchPlayerTopTracks(ctx, spotifyClient)
+	if err != nil {
+		log.Printf("Failed to fetch top tracks: %v", err)
+		return nil, nil
+	}
+	authPlayer.TopTracks = tracks
+	authPlayer.AccessToken = joinPayload.AccessToken
 
 	player := &game.Player{
 		Player:     authPlayer,
@@ -282,7 +250,7 @@ func (s *Server) handleJoinRoom(ctx context.Context, conn *websocket.Conn, paylo
 		JoinedAt:   time.Now(),
 	}
 
-	// Join room
+	// Join the persistent room (no shutdown check needed)
 	room.Join <- player
 
 	return room, player

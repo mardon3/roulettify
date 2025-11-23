@@ -1,6 +1,8 @@
 package game
 
 import (
+	"fmt"
+	"log"
 	"sync"
 )
 
@@ -10,57 +12,70 @@ type RoomManager struct {
 }
 
 func NewRoomManager() *RoomManager {
-	return &RoomManager{
+	rm := &RoomManager{
 		rooms: make(map[string]*GameRoom),
+	}
+	
+	// Initialize 3 persistent rooms
+	rm.initializePersistentRooms()
+	
+	return rm
+}
+
+// initializePersistentRooms creates the 3 permanent game rooms
+func (rm *RoomManager) initializePersistentRooms() {
+	roomNames := []string{"Room 1", "Room 2", "Room 3"}
+	
+	for _, roomName := range roomNames {
+		room := NewGameRoom(roomName)
+		rm.rooms[roomName] = room
+		go room.Run()
+		log.Printf("Initialized persistent room: %s", roomName)
 	}
 }
 
-func (rm *RoomManager) CreateRoom(roomID string) (*GameRoom, error) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
+// GetRoom returns a room by ID
+func (rm *RoomManager) GetRoom(roomID string) (*GameRoom, error) {
+	rm.mu.RLock()
+	defer rm.mu.RUnlock()
 
-	// Check if room already exists
 	if room, exists := rm.rooms[roomID]; exists {
 		return room, nil
 	}
 
-	// Create new room
-	room := NewGameRoom(roomID)
-	rm.rooms[roomID] = room
-
-	// Start room goroutine
-	go room.Run()
-
-	return room, nil
+	return nil, fmt.Errorf("room not found - valid rooms are: Room 1, Room 2, Room 3")
 }
 
-func (rm *RoomManager) GetRoom(roomID string) (*GameRoom, bool) {
+// ListRooms returns all persistent rooms with their player counts
+// Rooms are always returned in order: Room 1, Room 2, Room 3
+func (rm *RoomManager) ListRooms() []RoomInfo {
 	rm.mu.RLock()
 	defer rm.mu.RUnlock()
 
-	room, exists := rm.rooms[roomID]
-	return room, exists
+	// Return rooms in consistent order
+	roomOrder := []string{"Room 1", "Room 2", "Room 3"}
+	roomInfos := make([]RoomInfo, 0, 3)
+	
+	for _, roomID := range roomOrder {
+		if room, exists := rm.rooms[roomID]; exists {
+			room.mu.RLock()
+			roomInfos = append(roomInfos, RoomInfo{
+				ID:          roomID,
+				PlayerCount: len(room.Players),
+				MaxPlayers:  MaxPlayersPerRoom,
+				State:       room.State,
+			})
+			room.mu.RUnlock()
+		}
+	}
+	return roomInfos
 }
 
-func (rm *RoomManager) DeleteRoom(roomID string) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	if room, exists := rm.rooms[roomID]; exists {
-		close(room.Shutdown)
-		delete(rm.rooms, roomID)
-	}
-}
-
-func (rm *RoomManager) ListRooms() []string {
-	rm.mu.RLock()
-	defer rm.mu.RUnlock()
-
-	rooms := make([]string, 0, len(rm.rooms))
-	for roomID := range rm.rooms {
-		rooms = append(rooms, roomID)
-	}
-	return rooms
+type RoomInfo struct {
+	ID          string    `json:"id"`
+	PlayerCount int       `json:"player_count"`
+	MaxPlayers  int       `json:"max_players"`
+	State       GameState `json:"state"`
 }
 
 func (rm *RoomManager) GetMetrics() map[string]interface{} {
@@ -85,3 +100,4 @@ func (rm *RoomManager) GetMetrics() map[string]interface{} {
 		"active_players": activePlayers,
 	}
 }
+

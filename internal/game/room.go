@@ -13,6 +13,8 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
+const MaxPlayersPerRoom = 6
+
 type GameRoom struct {
 	ID           string
 	Players      map[string]*Player
@@ -23,7 +25,6 @@ type GameRoom struct {
 	CurrentTrack *auth.Track
 	Guesses      map[string]Guess
 	State        GameState
-	CreatedAt    time.Time
 	RoundTimer   *time.Timer
 
 	// Channels
@@ -32,26 +33,23 @@ type GameRoom struct {
 	Guess     chan Guess
 	StartGame chan int
 	Broadcast chan Message
-	Shutdown  chan struct{}
 
 	mu sync.RWMutex
 }
 
 func NewGameRoom(id string) *GameRoom {
 	return &GameRoom{
-		ID:          id,
-		Players:     make(map[string]*Player),
-		PlayerOrder: make([]string, 0),
-		Scores:      make(map[string]int),
-		Guesses:     make(map[string]Guess),
-		State:       StateWaiting,
-		CreatedAt:   time.Now(),
-		Join:        make(chan *Player, 10),
-		Leave:       make(chan string, 10),
-		Guess:       make(chan Guess, 50),
-		StartGame:   make(chan int, 1),
-		Broadcast:   make(chan Message, 100),
-		Shutdown:    make(chan struct{}),
+		ID:           id,
+		Players:      make(map[string]*Player),
+		PlayerOrder:  make([]string, 0),
+		Scores:       make(map[string]int),
+		Guesses:      make(map[string]Guess),
+		State:        StateWaiting,
+		Join:         make(chan *Player, 10),
+		Leave:        make(chan string, 10),
+		Guess:        make(chan Guess, 10),
+		StartGame:    make(chan int, 1),
+		Broadcast:    make(chan Message, 10),
 	}
 }
 
@@ -60,19 +58,11 @@ func (r *GameRoom) Run() {
 		if r.RoundTimer != nil {
 			r.RoundTimer.Stop()
 		}
+		log.Printf("Room %s: Goroutine stopped", r.ID)
 	}()
 
 	for {
 		select {
-		case <-r.Shutdown:
-			r.broadcastToAll(Message{
-				Type: MsgTypeError,
-				Payload: map[string]interface{}{
-					"message": "Room shutting down",
-				},
-			})
-			return
-
 		case player := <-r.Join:
 			r.handlePlayerJoin(player)
 
@@ -95,6 +85,18 @@ func (r *GameRoom) handlePlayerJoin(player *Player) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Check room capacity
+	if len(r.Players) >= MaxPlayersPerRoom {
+		log.Printf("Room %s is full (%d/%d players)", r.ID, len(r.Players), MaxPlayersPerRoom)
+		r.Broadcast <- Message{
+			Type: MsgTypeError,
+			Payload: map[string]interface{}{
+				"message": "Room is full (maximum 6 players)",
+			},
+		}
+		return
+	}
+
 	// Add player
 	r.Players[player.ID] = player
 	r.PlayerOrder = append(r.PlayerOrder, player.ID)
@@ -107,10 +109,9 @@ func (r *GameRoom) handlePlayerJoin(player *Player) {
 		Type: MsgTypePlayerJoined,
 		Payload: map[string]interface{}{
 			"player": PlayerInfo{
-				ID:      player.ID,
-				Name:    player.Name,
-				IsGuest: auth.IsMockPlayer(player.ID),
-				Score:   0,
+				ID:    player.ID,
+				Name:  player.Name,
+				Score: 0,
 			},
 			"player_count": len(r.Players),
 			"players":      r.getPlayerInfoList(),
@@ -156,14 +157,14 @@ func (r *GameRoom) handlePlayerLeave(playerID string) {
 		},
 	}
 
-	// Shutdown room if empty
-	if len(r.Players) == 0 {
-		go func() {
-			time.Sleep(1 * time.Minute)
-			if len(r.Players) == 0 {
-				close(r.Shutdown)
-			}
-		}()
+	// If room becomes empty during a game, reset to waiting state
+	if len(r.Players) == 0 && r.State != StateWaiting {
+		r.State = StateWaiting
+		r.CurrentRound = 0
+		r.Scores = make(map[string]int)
+		if r.RoundTimer != nil {
+			r.RoundTimer.Stop()
+		}
 	}
 }
 
@@ -455,10 +456,9 @@ func (r *GameRoom) getPlayerInfoList() []PlayerInfo {
 	for _, id := range r.PlayerOrder {
 		if player, exists := r.Players[id]; exists {
 			players = append(players, PlayerInfo{
-				ID:      player.ID,
-				Name:    player.Name,
-				IsGuest: auth.IsMockPlayer(player.ID),
-				Score:   r.Scores[player.ID],
+				ID:    player.ID,
+				Name:  player.Name,
+				Score: r.Scores[player.ID],
 			})
 		}
 	}
