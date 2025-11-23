@@ -1,31 +1,22 @@
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 
 interface Player {
   id: string
   name: string
-  is_guest?: boolean
 }
 
 interface LobbyProps {
   player: Player | null
   isAuthenticated: boolean
   onJoinRoom: (roomId: string) => void
-  onGuestLogin: (guestIndex: number) => void
 }
 
-export default function Lobby({ player, isAuthenticated, onJoinRoom, onGuestLogin }: LobbyProps) {
+export default function Lobby({ player, isAuthenticated, onJoinRoom }: LobbyProps) {
   const [roomInput, setRoomInput] = useState('')
   const [isJoining, setIsJoining] = useState(false)
-  const guestCounterRef = useRef(0)
 
   const handleSpotifyAuth = () => {
     window.location.href = 'http://localhost:8080/auth/spotify'
-  }
-
-  const handleGuestClick = () => {
-    const currentIndex = guestCounterRef.current
-    guestCounterRef.current += 1
-    onGuestLogin(currentIndex)
   }
 
   const handleJoinOrCreateRoom = () => {
@@ -58,7 +49,7 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom, onGuestLogi
                   Sign In
                 </h2>
                 <p className="text-gray-600">
-                  Connect with Spotify or play as a guest
+                  Connect with Spotify to play
                 </p>
               </div>
 
@@ -69,25 +60,15 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom, onGuestLogi
                 <span className="text-xl">🎵 Sign in with Spotify</span>
               </button>
 
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">OR</span>
-                </div>
+              <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  ℹ️ <strong>Note:</strong> It may take a few seconds after authentication to fetch your top 50 Spotify tracks.
+                </p>
               </div>
-
-              <button
-                onClick={handleGuestClick}
-                className="w-full bg-purple-500 hover:bg-purple-600 text-white font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-105 shadow-lg"
-              >
-                <span className="text-xl">👤 Continue as Guest</span>
-              </button>
 
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <p className="text-sm text-blue-800">
-                  <strong>Guest Mode:</strong> Test the game with mock data without needing multiple Spotify accounts!
+                  🔐 We securely access your top 50 Spotify tracks to play the game.
                 </p>
               </div>
             </div>
@@ -95,10 +76,10 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom, onGuestLogi
             <div className="space-y-6">
               <div className="text-center pb-4 border-b">
                 <h2 className="text-2xl font-bold text-gray-800 mb-2">
-                  Welcome, {player?.name}! {player?.is_guest ? '👤' : '✓'}
+                  Welcome, {player?.name}! ✓
                 </h2>
                 <p className="text-sm text-gray-600">
-                  {player?.is_guest ? 'Playing as Guest' : 'Connected with Spotify'}
+                  Connected with Spotify
                 </p>
               </div>
 

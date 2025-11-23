@@ -7,7 +7,6 @@ interface Player {
   name: string
   spotify_id: string
   access_token?: string
-  is_guest?: boolean
 }
 
 function App() {
@@ -47,7 +46,6 @@ function App() {
               name: parsed.name,
               spotify_id: parsed.spotify_id,
               access_token: parsed.access_token,
-              is_guest: parsed.is_guest || false,
             })
             setIsAuthenticated(true)
             console.log('Authentication state updated!')
@@ -71,39 +69,6 @@ function App() {
     setRoomId('')
   }
 
-  const handleGuestLogin = async (guestIndex: number) => {
-    try {
-      console.log('Requesting guest login with index:', guestIndex)
-      
-      const response = await fetch(`http://localhost:8080/auth/guest`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ guest_index: guestIndex }),
-      })
-
-      const data = await response.json()
-      console.log('Guest login response:', data)
-      
-      if (data.success) {
-        const parsed = JSON.parse(data.player_data)
-        console.log('Guest player created:', parsed)
-        
-        setPlayer({
-          id: parsed.id,
-          name: parsed.name,
-          spotify_id: parsed.spotify_id,
-          access_token: parsed.access_token,
-          is_guest: true,
-        })
-        setIsAuthenticated(true)
-      }
-    } catch (error) {
-      console.error('Guest login error:', error)
-    }
-  }
-
   return (
     <div className="min-h-screen bg-linear-to-br from-purple-600 via-pink-500 to-red-500">
       {gameState === 'lobby' ? (
@@ -111,7 +76,6 @@ function App() {
           player={player}
           isAuthenticated={isAuthenticated}
           onJoinRoom={handleJoinRoom}
-          onGuestLogin={handleGuestLogin}
         />
       ) : (
         player && (
