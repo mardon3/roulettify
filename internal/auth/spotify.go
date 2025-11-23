@@ -99,6 +99,14 @@ func FetchPlayerTopTracks(ctx context.Context, client *spotify.Client) ([]Track,
 
 	tracks := make([]Track, len(topTracksPage.Tracks))
 	for i, track := range topTracksPage.Tracks {
+		// Use the advanced cached fetcher with rate limiting
+		previewURL := FetchPreviewURLCached(string(track.ID))
+		
+		// Fallback to API preview URL if scraping fails
+		if previewURL == "" && track.PreviewURL != "" {
+			previewURL = track.PreviewURL
+		}
+
 		tracks[i] = Track{
 			ID:         string(track.ID),
 			Name:       track.Name,
@@ -106,9 +114,12 @@ func FetchPlayerTopTracks(ctx context.Context, client *spotify.Client) ([]Track,
 			Rank:       i + 1,
 			URI:        string(track.URI),
 			ImageURL:   getAlbumImage(track.Album),
-			PreviewURL: track.PreviewURL,
+			PreviewURL: previewURL,
 		}
 	}
+
+	// Log statistics about preview URL availability
+	LogPreviewURLStats(tracks)
 
 	return tracks, nil
 }
@@ -126,4 +137,29 @@ func getAlbumImage(album spotify.SimpleAlbum) string {
 		return album.Images[0].URL
 	}
 	return ""
+}
+
+// fetchPreviewURL scrapes the Spotify embed page to extract the preview URL
+// This works around the API limitation where preview URLs may not be available
+func fetchPreviewURL(trackID string) string {
+	if trackID == "" {
+		return ""
+	}
+
+	htmlContent, err := scrapeSpotifyEmbed(trackID)
+	if err != nil {
+		log.Printf("Failed to scrape embed page for track %s: %v", trackID, err)
+		return ""
+	}
+
+	// Extract preview URL using the proven regex pattern
+	previewURL := extractPreviewURL(htmlContent)
+	
+	if previewURL != "" {
+		log.Printf("Successfully scraped preview URL for track %s", trackID)
+	} else {
+		log.Printf("No preview URL found for track %s", trackID)
+	}
+
+	return previewURL
 }
