@@ -58,7 +58,6 @@ type JoinRoomPayload struct {
 	PlayerID    string `json:"player_id"`
 	PlayerName  string `json:"player_name"`
 	AccessToken string `json:"access_token"`
-	IsGuest     bool   `json:"is_guest"`
 }
 
 // StartGamePayload for starting a game
@@ -95,8 +94,7 @@ type RoundResult struct {
 
 // PlayerInfo for client-side display
 type PlayerInfo struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	IsGuest bool   `json:"is_guest"`
-	Score   int    `json:"score"`
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Score int    `json:"score"`
 }
