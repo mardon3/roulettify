@@ -35,7 +35,19 @@ docker-down:
 # Test the application
 test:
 	@echo "Testing..."
-	@go test ./... -v
+	@go test ./internal/game/... -v
+
+# Test with coverage
+test-coverage:
+	@echo "Testing with coverage..."
+	@go test ./internal/game/... -cover -coverprofile=coverage.out
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+# Test for race conditions
+test-race:
+	@echo "Testing for race conditions..."
+	@go test ./internal/game/... -race -v
 
 # Clean the binary
 clean:
@@ -59,4 +71,4 @@ watch:
             fi; \
         fi
 
-.PHONY: all build run test clean watch
+.PHONY: all build run test test-coverage test-race clean watch docker-run docker-down
