@@ -1,8 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Player {
   id: string
   name: string
+}
+
+interface Room {
+  id: string
+  player_count: number
+  max_players: number
+  state: string
 }
 
 interface LobbyProps {
@@ -12,20 +19,56 @@ interface LobbyProps {
 }
 
 export default function Lobby({ player, isAuthenticated, onJoinRoom }: LobbyProps) {
-  const [roomInput, setRoomInput] = useState('')
+  const [rooms, setRooms] = useState<Room[]>([])
   const [isJoining, setIsJoining] = useState(false)
+  const [joinError, setJoinError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    const fetchRooms = async () => {
+      try {
+        const response = await fetch('http://localhost:8080/rooms')
+        const data = await response.json()
+        setRooms(data.rooms || [])
+      } catch (error) {
+        console.error('Failed to fetch rooms:', error)
+      }
+    }
+
+    fetchRooms()
+    // Refresh room list every 3 seconds
+    const interval = setInterval(fetchRooms, 3000)
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
 
   const handleSpotifyAuth = () => {
     window.location.href = 'http://localhost:8080/auth/spotify'
   }
 
-  const handleJoinOrCreateRoom = () => {
-    if (roomInput.trim() && !isJoining) {
+  const handleJoinRoom = (roomId: string) => {
+    if (!isJoining) {
       setIsJoining(true)
+      setJoinError(null)
+      
+      // Small delay for visual feedback
       setTimeout(() => {
-        onJoinRoom(roomInput.trim())
+        onJoinRoom(roomId)
         setIsJoining(false)
       }, 300)
+    }
+  }
+
+  const getStateLabel = (state: string) => {
+    switch (state) {
+      case 'waiting':
+        return { text: 'Waiting', color: 'bg-green-100 text-green-800' }
+      case 'playing':
+        return { text: 'In Game', color: 'bg-yellow-100 text-yellow-800' }
+      case 'game_over':
+        return { text: 'Game Over', color: 'bg-blue-100 text-blue-800' }
+      default:
+        return { text: 'Unknown', color: 'bg-gray-100 text-gray-800' }
     }
   }
 
@@ -62,7 +105,7 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom }: LobbyProp
 
               <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4">
                 <p className="text-sm text-yellow-800">
-                  ℹ️ <strong>Note:</strong> It may take a few seconds after authentication to fetch your top 50 Spotify tracks.
+                  ℹ️ <strong>Note:</strong> It may take up to a minute after authentication to fetch your top 50 Spotify tracks.
                 </p>
               </div>
 
@@ -84,39 +127,68 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom }: LobbyProp
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Room Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter room name..."
-                  value={roomInput}
-                  onChange={(e) => setRoomInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleJoinOrCreateRoom()}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Enter any room name to create or join
-                </p>
+                <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                  Select a Room
+                </h3>
+                
+                {rooms.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin text-4xl mb-2">⏳</div>
+                    <p className="text-gray-600">Loading rooms...</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {rooms.map((room) => {
+                      const stateInfo = getStateLabel(room.state)
+                      const isFull = room.player_count >= room.max_players
+                      return (
+                        <button
+                          key={room.id}
+                          onClick={() => handleJoinRoom(room.id)}
+                          disabled={isJoining || isFull}
+                          className={`w-full rounded-xl p-4 transition-all transform shadow-lg ${
+                            isFull
+                              ? 'bg-gray-400 cursor-not-allowed opacity-60'
+                              : 'bg-linear-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 hover:scale-102'
+                          } text-white disabled:cursor-not-allowed`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-2xl">🎮</span>
+                              <div className="text-left">
+                                <p className="font-bold text-lg">{room.id}</p>
+                                <p className="text-sm opacity-90">
+                                  {room.player_count}/{room.max_players} players {isFull && '(Full)'}
+                                </p>
+                              </div>
+                            </div>
+                            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${stateInfo.color}`}>
+                              {stateInfo.text}
+                            </span>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={handleJoinOrCreateRoom}
-                disabled={!roomInput.trim() || isJoining}
-                className={`w-full font-bold py-4 px-6 rounded-xl transition-all transform shadow-lg ${
-                  !roomInput.trim() || isJoining
-                    ? 'bg-gray-300 cursor-not-allowed'
-                    : 'bg-linear-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 hover:scale-105 text-white'
-                }`}
-              >
-                {isJoining ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="animate-spin">⏳</span> Joining...
-                  </span>
-                ) : (
-                  <span className="text-xl">🚀 Join / Create Room</span>
-                )}
-              </button>
+              {joinError && (
+                <div className="bg-red-50 border border-red-300 rounded-lg p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-2">
+                      <span className="text-red-600">⚠️</span>
+                      <p className="text-sm text-red-700">{joinError}</p>
+                    </div>
+                    <button
+                      onClick={() => setJoinError(null)}
+                      className="text-red-600 hover:text-red-800 font-bold"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
