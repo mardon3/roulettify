@@ -1,65 +1,255 @@
-# Roulettify - Spotify Multiplayer Game
+# 🎵 Roulettify - Spotify Multiplayer Game
 
-A real-time multiplayer web game where players authenticate with Spotify and guess which friend has listened to randomly selected tracks the most based on their top 50 tracks from the past 6 months.
+A real-time multiplayer web game where players guess which friend has listened to randomly selected tracks the most, based on their Spotify listening history.
 
-## Features
+## 🎮 How It Works
 
-- **Spotify Integration**: OAuth2 authentication with zmb3/spotify library
-- **Real-time Multiplayer**: WebSocket-based game communication
-- **30-Second Previews**: Each round plays a preview snippet automatically
-- **Scoring System**: 10 points for correct guess + 5 points speed bonus for fastest
-- **In-Memory Architecture**: Optimized for small-scale gameplay (3-10 players)
+1. **Authenticate** with Spotify
+2. **Join one of 3 persistent rooms** (max 6 players per room)
+3. **Listen** to 30-second track previews
+4. **Guess** which player has that track ranked highest in their top 50
+5. **Earn points** for correct guesses (10 pts + 5 pts speed bonus)
+6. **Compete** across 10 rounds to become the champion
 
-## Technology Stack
+## ✨ Features
 
-- **Backend**: Go 1.25+ with Gin web framework
-- **Frontend**: React 18 + TypeScript with Vite
-- **Real-time Communication**: WebSocket with gorilla/websocket
-- **Spotify API**: zmb3/spotify/v2 library with OAuth2
+- **Spotify OAuth2 Integration**: Securely authenticate and fetch your top 50 tracks
+- **Real-time Multiplayer**: WebSocket-powered live game updates
+- **3 Persistent Rooms**: Always-available game rooms (Room 1, Room 2, Room 3)
+- **Capacity Management**: Max 6 players per room (18 concurrent players total)
+- **Audio Previews**: 30-second Spotify track snippets for each round (scraped from embeds)
+- **Dynamic Scoring**: 10 base points + 5 bonus for fastest correct guess
+- **Persistent Rankings**: Tracks final standings and winner announcement
+- **Optimized Architecture**: Persistent rooms with no cleanup overhead for efficient hosting
 
-## Prerequisites
+## 🛠 Technology Stack
 
-- Go 1.25 or higher
-- Node.js 18+ and npm
-- Spotify Developer account and application credentials
+### Backend
+- **Go 1.25+** with Gin web framework
+- **WebSocket** (coder/websocket) for real-time communication
+- **Spotify API** (zmb3/spotify/v2) with OAuth2 authentication
+- **Web Scraping** for preview URLs (colly framework)
 
-## Project Structure
+### Frontend
+- **React 18** with TypeScript
+- **Vite** build tool with HMR
+- **Tailwind CSS** for styling
+- **WebSocket client** for game updates
+
+### Infrastructure
+- **Docker** multi-stage builds
+- **Cloud-ready** (optimized for low-memory deployments)
+
+## 📋 Prerequisites
+
+- **Go 1.25+**
+- **Node.js 18+** and npm
+- **Spotify Developer account** ([create one here](https://developer.spotify.com/dashboard))
+- **Docker & Docker Compose** (optional, for containerized deployment)
+
+## 📁 Project Structure
 
 ```
 roulettify/
-├── cmd/
-│   └── api/
-│       └── main.go              # Application entry point
+├── cmd/api/main.go                 # Entry point
 ├── internal/
 │   ├── server/
-│   │   ├── server.go            # Server initialization
-│   │   └── routes.go            # Gin router + Spotify OAuth handlers
-│   └── auth/
-│       └── spotify.go           # Spotify authentication logic
+│   │   ├── server.go              # Server initialization
+│   │   └── routes.go              # HTTP/WebSocket routes
+│   ├── auth/
+│   │   ├── spotify.go             # Spotify OAuth & API
+│   │   └── scraper.go             # Preview URL scraping
+│   └── game/
+│       ├── room.go                # Game room logic
+│       ├── models.go              # Data structures
+│       ├── manager.go             # 3 persistent rooms
+│       └── *_test.go              # Test files
 ├── frontend/
 │   ├── src/
-│   │   ├── App.tsx              # Main React component
-│   │   └── main.tsx             # React entry point
+│   │   ├── App.tsx                # Main component
+│   │   ├── components/
+│   │   │   ├── Lobby.tsx          # Room selection UI
+│   │   │   └── GameRoom.tsx       # Game interface
+│   │   └── main.tsx               # React entry point
 │   └── package.json
-├── Dockerfile                    # Multi-stage Docker build
-├── docker-compose.yml           # Docker Compose configuration
-├── Makefile                     # Build automation
-├── go.mod                       # Go dependencies
-└── .env                         # Environment variables
+├── Dockerfile                      # Multi-stage build
+├── docker-compose.yml
+├── Makefile
+└── .env
 ```
 
-## Environment Variables
+## 🔌 API Endpoints
+
+### REST
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/` | Health check |
+| GET | `/health` | Detailed metrics |
+| GET | `/rooms` | List all 3 persistent rooms with player counts |
+| GET | `/auth/spotify` | Start Spotify OAuth |
+| GET | `/auth/callback` | OAuth callback |
+
+### WebSocket (`/ws`)
+
+**Client → Server**:
+
+```json
+{
+  "type": "join_room",
+  "payload": {
+    "room_id": "Room 1",
+    "player_id": "user123",
+    "player_name": "John",
+    "access_token": "spotify_token"
+  }
+}
+```
+
+```json
+{
+  "type": "start_game",
+  "payload": {
+    "room_id": "Room 1",
+    "total_rounds": 10
+  }
+}
+```
+
+```json
+{
+  "type": "submit_guess",
+  "payload": {
+    "room_id": "Room 1",
+    "player_id": "user123",
+    "guessed_player_id": "friend456"
+  }
+}
+```
+
+**Server → Client**:
+
+```json
+{
+  "type": "player_joined",
+  "payload": {
+    "players": [...],
+    "player_count": 2
+  }
+}
+```
+
+```json
+{
+  "type": "round_started",
+  "payload": {
+    "round": 1,
+    "total_rounds": 10,
+    "track": {
+      "id": "123",
+      "name": "Song Name",
+      "artists": ["Artist 1"],
+      "image_url": "...",
+      "preview_url": "..."
+    },
+    "players": [...]
+  }
+}
+```
+
+```json
+{
+  "type": "round_complete",
+  "payload": {
+    "round": 1,
+    "winner_id": "user123",
+    "winner_rank": 5,
+    "correct_guessers": ["user123"],
+    "points_awarded": {"user123": 15},
+    "updated_scores": {"user123": 15, "friend456": 0}
+  }
+}
+```
+
+```json
+{
+  "type": "game_over",
+  "payload": {
+    "winner_id": "user123",
+    "final_scores": {"user123": 85, "friend456": 60}
+  }
+}
+```
+
+## 🎯 Scoring System
+
+| Event | Points |
+|-------|--------|
+| Correct guess | +10 |
+| Speed bonus (fastest) | +5 |
+| Wrong guess | 0 |
+
+**Winner Determination**: The player whose top 50 contains the track with the **lowest rank number** (most listened to) wins the round.
+
+## 🚀 Quick Start
+
+### Local Development
+
+```bash
+# Clone the repository
+git clone https://github.com/mardon3/roulettify.git
+cd roulettify
+
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Spotify credentials
+
+# Run with hot reload (installs air if needed)
+make watch
+
+# Or run manually
+make run
+```
+
+### Docker
+
+```bash
+# Build and run with Docker Compose
+make docker-run
+
+# Access at http://localhost:8080
+```
+
+### Testing
+
+```bash
+# Run all tests
+make test
+
+# Run with coverage
+make test-coverage
+
+# Test for race conditions
+make test-race
+```
+
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a `.env` file in the root directory:
 
 ```bash
 # Server
 PORT=8080
+APP_ENV=development
 
-# Frontend URL (for OAuth redirect)
+# Frontend
 FRONTEND_URL=http://localhost:5173
 
-# Spotify OAuth
-SPOTIFY_CLIENT_ID=PLACEHOLDER_CLIENT_ID
-SPOTIFY_CLIENT_SECRET=PLACEHOLDER_CLIENT_SECRET
+# Spotify (Get from https://developer.spotify.com/dashboard)
+SPOTIFY_CLIENT_ID=your_client_id_here
+SPOTIFY_CLIENT_SECRET=your_client_secret_here
 SPOTIFY_REDIRECT_URI=http://localhost:8080/auth/callback
 
 # CORS
@@ -67,98 +257,37 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 
 # Game Settings
 DEFAULT_TOTAL_ROUNDS=10
-MAX_PLAYERS_PER_ROOM=5
+MAX_PLAYERS_PER_ROOM=6
 ```
 
-## API Endpoints
+### Spotify Developer Setup
 
-### REST
+1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
+2. Create a new app
+3. Add redirect URI: `http://localhost:8080/auth/callback`
+4. Copy Client ID and Client Secret to `.env`
+5. For production, add your production URL to redirect URIs
 
-- `GET /` - Health check
-- `GET /health` - Detailed health status
-- `GET /auth/spotify` - Initiate Spotify OAuth flow
-- `GET /auth/callback` - OAuth callback handler
+## 🏗️ Architecture
 
-### WebSocket
+### Persistent Room System
+- **3 fixed rooms** (Room 1, Room 2, Room 3) created at startup
+- **6 player capacity** per room (18 total concurrent players)
+- **No dynamic creation/deletion** - rooms never shut down
+- **Memory efficient** - optimized for low-memory cloud deployments
+- **Consistent ordering** - rooms always appear in the same order in UI
 
-- `GET /websocket` - WebSocket connection for real-time game updates
+### Preview URL Strategy
+As of Nov 2024, Spotify no longer provides preview URLs via API for new applications. This project uses web scraping:
+- Fetches Spotify embed pages for each track
+- Extracts preview URLs using regex patterns
+- Implements caching to reduce scraping overhead
+- Falls back gracefully when previews unavailable
 
-## WebSocket Messages
+## 📊 Performance
 
-### Client → Server
-
-**Join Room**
-```json
-{ "type": "join_room", "payload": { "room_id": "...", "player_id": "...", "access_token": "..." } }
-```
-
-**Start Game**
-```json
-{ "type": "start_game", "payload": { "room_id": "...", "total_rounds": 10 } }
-```
-
-**Submit Guess**
-```json
-{ "type": "submit_guess", "payload": { "room_id": "...", "player_id": "...", "guessed_player_id": "..." } }
-```
-
-### Server → Client
-
-**Player Joined**
-```json
-{ "type": "player_joined", "payload": { "player": {...}, "player_count": 2 } }
-```
-
-**Round Started**
-```json
-{ "type": "round_started", "payload": { "round": 1, "total_rounds": 10, "track": {...}, "players": [...] } }
-```
-
-**Round Complete**
-```json
-{ "type": "round_complete", "payload": { "winner_id": "...", "points_awarded": {...}, "updated_scores": {...} } }
-```
-
-**Game Over**
-```json
-{ "type": "game_over", "payload": { "winner_id": "...", "final_scores": {...} } }
-```
-
-## Development Tips
-
-### Hot Reload Go
-
-Install and use `air` for auto-reload:
-```bash
-go install github.com/cosmtrek/air@latest
-air
-```
-
-### Test WebSocket
-
-In browser console:
-```javascript
-const ws = new WebSocket('ws://localhost:8080/ws');
-ws.onmessage = (e) => console.log(JSON.parse(e.data));
-ws.send(JSON.stringify({
-  type: 'join_room',
-  payload: { room_id: 'test', player_id: 'p1', access_token: 'token' }
-}));
-```
-
-## Important Notes
-
-### Spotify Preview URLs
-
-As of November 2024, Spotify deprecated preview URLs for new applications. If preview URLs are unavailable:
-
-1. The game will attempt to find tracks with previews
-2. Falls back to using Spotify embed player
-3. Consider applying for Extended API Access with Spotify
-
-
-## Scoring Rules
-
-- **Base Points**: 10 points for correct guess
-- **Speed Bonus**: 5 additional points for fastest guess
-- **Track Ranking**: Winner is determined by who has track ranked highest (lowest rank #)
+- **Memory**: ~50-100MB with 3 persistent rooms
+- **Concurrent Users**: Up to 18 (6 per room)
+- **WebSocket Connections**: Persistent per player
+- **Latency**: <100ms for game actions
+- **Deployment**: Minimal resource usage 
