@@ -79,7 +79,6 @@ func (s *Server) HandleSpotifyAuth(c *gin.Context) {
 
 	authURL := s.spotifyAuth.GetAuthURL(state)
 
-	log.Printf("Redirecting to Spotify auth: %s", authURL)
 	c.Redirect(http.StatusTemporaryRedirect, authURL)
 }
 
@@ -88,22 +87,16 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 	code := c.Query("code")
 	state := c.Query("state")
 
-	log.Printf("OAuth callback received - code: %s..., state: %s", code[:min(20, len(code))], state)
-
 	storedState, err := c.Cookie("oauth_state")
 	if err != nil {
-		log.Printf("Cookie error: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "No state cookie found"})
 		return
 	}
 
 	if storedState != state {
-		log.Printf("State mismatch! Stored: %s, Received: %s", storedState, state)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "State mismatch"})
 		return
 	}
-
-	log.Printf("State validation passed, exchanging code for token...")
 
 	token, err := s.spotifyAuth.ExchangeCode(c.Request.Context(), code)
 	if err != nil {
@@ -111,8 +104,6 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to exchange code"})
 		return
 	}
-
-	log.Printf("Token received: %s...", token.AccessToken[:20])
 
 	spotifyClient := s.spotifyAuth.NewClient(c.Request.Context(), token)
 
@@ -123,16 +114,12 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 		return
 	}
 
-	log.Printf("Player info fetched: %s (ID: %s)", player.Name, player.ID)
-
 	topTracks, err := auth.FetchPlayerTopTracks(c.Request.Context(), spotifyClient)
 	if err != nil {
 		log.Printf("Failed to fetch top tracks: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch top tracks"})
 		return
 	}
-
-	log.Printf("Fetched %d top tracks", len(topTracks))
 
 	player.AccessToken = token.AccessToken
 	player.TopTracks = topTracks
@@ -146,8 +133,6 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 
 	c.SetCookie("oauth_state", "", -1, "/", "", false, true)
 	c.SetCookie("player_session", string(playerJSON), 3600, "/", "", false, false)
-
-	log.Printf("Redirecting to frontend with auth=success")
 
 	frontendURL := os.Getenv("FRONTEND_URL")
 	if frontendURL == "" {

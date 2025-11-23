@@ -2,7 +2,6 @@ package game
 
 import (
 	"fmt"
-	"log"
 	"sync"
 )
 
@@ -30,7 +29,6 @@ func (rm *RoomManager) initializePersistentRooms() {
 		room := NewGameRoom(roomName)
 		rm.rooms[roomName] = room
 		go room.Run()
-		log.Printf("Initialized persistent room: %s", roomName)
 	}
 }
 
