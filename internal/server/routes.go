@@ -35,7 +35,6 @@ func (s *Server) RegisterRoutes() http.Handler {
 	})
 
 	// Basic routes
-	r.GET("/", s.HelloWorldHandler)
 	r.GET("/health", s.HealthCheckHandler)
 	r.GET("/rooms", s.ListRoomsHandler)
 
@@ -46,14 +45,16 @@ func (s *Server) RegisterRoutes() http.Handler {
 	// WebSocket route
 	r.GET("/ws", s.HandleWebSocket)
 
+	// Serve static files
+	r.Static("/assets", "./dist/assets")
+	r.StaticFile("/favicon.ico", "./dist/favicon.ico")
+	
+	// SPA fallback
+	r.NoRoute(func(c *gin.Context) {
+		c.File("./dist/index.html")
+	})
+
 	return r
-}
-
-func (s *Server) HelloWorldHandler(c *gin.Context) {
-	resp := make(map[string]string)
-	resp["message"] = "Hello World"
-
-	c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) HealthCheckHandler(c *gin.Context) {
@@ -113,6 +114,8 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch player info"})
 		return
 	}
+
+	log.Printf("Player info fetched: %s (ID: %s)", player.Name, player.ID)
 
 	topTracks, err := auth.FetchPlayerTopTracks(c.Request.Context(), spotifyClient)
 	if err != nil {

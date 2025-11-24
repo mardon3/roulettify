@@ -28,7 +28,7 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom }: LobbyProp
 
     const fetchRooms = async () => {
       try {
-        const response = await fetch('http://localhost:8080/rooms')
+        const response = await fetch('/rooms')
         const data = await response.json()
         setRooms(data.rooms || [])
       } catch (error) {
@@ -43,7 +43,7 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom }: LobbyProp
   }, [isAuthenticated])
 
   const handleSpotifyAuth = () => {
-    window.location.href = 'http://localhost:8080/auth/spotify'
+    window.location.href = '/auth/spotify'
   }
 
   const handleJoinRoom = (roomId: string) => {

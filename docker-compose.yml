@@ -3,20 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: prod
     restart: unless-stopped
     ports:
-      - ${PORT}:${PORT}
+      - "8080:8080"
+    env_file:
+      - .env
     environment:
-      APP_ENV: ${APP_ENV}
-      PORT: ${PORT}
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: frontend
-    restart: unless-stopped
-    ports:
-      - 5173:5173
-    depends_on:
-      - app
+      APP_ENV: ${APP_ENV:-development}
+      PORT: 8080
+

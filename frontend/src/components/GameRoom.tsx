@@ -59,7 +59,8 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
     if (hasConnected.current) return
     hasConnected.current = true
 
-    const websocket = new WebSocket('ws://localhost:8080/ws')
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const websocket = new WebSocket(`${protocol}//${window.location.host}/ws`)
     wsRef.current = websocket
 
     websocket.onopen = () => {
