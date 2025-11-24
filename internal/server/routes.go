@@ -76,7 +76,8 @@ func (s *Server) ListRoomsHandler(c *gin.Context) {
 // HandleSpotifyAuth initiates the Spotify OAuth flow
 func (s *Server) HandleSpotifyAuth(c *gin.Context) {
 	state := uuid.New().String()
-	c.SetCookie("oauth_state", state, 600, "/", "", false, true)
+	isProduction := os.Getenv("APP_ENV") == "production"
+	c.SetCookie("oauth_state", state, 600, "/", "", isProduction, true)
 
 	authURL := s.spotifyAuth.GetAuthURL(state)
 
@@ -135,7 +136,8 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 	})
 
 	c.SetCookie("oauth_state", "", -1, "/", "", false, true)
-	c.SetCookie("player_session", string(playerJSON), 3600, "/", "", false, false)
+	isProduction := os.Getenv("APP_ENV") == "production"
+	c.SetCookie("player_session", string(playerJSON), 3600, "/", "", isProduction, false)
 
 	frontendURL := os.Getenv("FRONTEND_URL")
 	if frontendURL == "" {
