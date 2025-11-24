@@ -66,7 +66,13 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-purple-600 via-pink-500 to-red-500">
+    <div className="min-h-screen bg-spotify-dark-gray text-white relative overflow-hidden">
+      {/* Background ambient glow */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10 pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-purple-900/30 rounded-full blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-spotify-green/20 rounded-full blur-[120px]" />
+      </div>
+
       {gameState === 'lobby' ? (
         <Lobby
           player={player}

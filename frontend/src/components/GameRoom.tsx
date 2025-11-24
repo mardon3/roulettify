@@ -234,49 +234,48 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
         {errorMessage && (
-          <div className="bg-red-50 border-2 border-red-500 rounded-xl p-4 mb-6 flex items-center justify-between">
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 mb-6 flex items-center justify-between animate-shake">
             <div className="flex items-center gap-3">
               <span className="text-2xl">⚠️</span>
               <div>
-                <p className="font-bold text-red-900">Error</p>
-                <p className="text-red-700">{errorMessage}</p>
+                <p className="font-bold text-red-400">Error</p>
+                <p className="text-red-200">{errorMessage}</p>
               </div>
             </div>
             <button
               onClick={() => setErrorMessage(null)}
-              className="text-red-500 hover:text-red-700 font-bold text-xl"
+              className="text-red-400 hover:text-red-200 font-bold text-xl"
             >
               ✕
             </button>
           </div>
         )}
         
-        <div className="bg-white rounded-2xl shadow-2xl p-6 mb-6 transition-all">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">
-                Room: {roomId}
-              </h1>
-              <p className="text-gray-600">Playing as: {player.name}</p>
-            </div>
-            <button
-              onClick={handleLeave}
-              disabled={isStarting}
-              className="bg-red-500 hover:bg-red-600 disabled:bg-red-300 text-white font-bold py-2 px-6 rounded-lg transition-all"
-            >
-              Leave Room
-            </button>
+        <div className="glass-panel rounded-2xl p-6 mb-6 transition-all flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+              <span className="text-spotify-green">Room:</span> {roomId}
+            </h1>
+            <p className="text-gray-400">Playing as: <span className="text-white font-semibold">{player.name}</span></p>
           </div>
+          <button
+            onClick={handleLeave}
+            disabled={isStarting}
+            className="glass-button hover:bg-red-500/20 hover:border-red-500/50 text-red-400 hover:text-red-200 font-bold py-2 px-6 rounded-lg transition-all"
+          >
+            Leave Room
+          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             {gameState === 'waiting' && (
-              <div className="bg-white rounded-2xl shadow-2xl p-8 transition-all">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">
+              <div className="glass-panel rounded-2xl p-8 md:p-12 text-center transition-all">
+                <div className="text-5xl md:text-6xl mb-6 animate-bounce">🎵</div>
+                <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">
                   Waiting for Players...
                 </h2>
-                <p className="text-gray-600 mb-6">
+                <p className="text-gray-400 mb-8 text-lg">
                   {players.length} player{players.length !== 1 ? 's' : ''} in room
                 </p>
                 
@@ -284,17 +283,17 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                   <button
                     onClick={handleStartGame}
                     disabled={isStarting}
-                    className={`w-full font-bold py-4 px-6 rounded-xl transition-all transform shadow-lg ${
+                    className={`w-full font-bold py-4 px-6 rounded-full transition-all transform shadow-lg text-lg ${
                       isStarting 
-                        ? 'bg-gray-400 cursor-not-allowed' 
-                        : 'bg-green-500 hover:bg-green-600 hover:scale-105'
-                    } text-white`}
+                        ? 'bg-gray-600 cursor-not-allowed opacity-50' 
+                        : 'bg-spotify-green hover:bg-[#1ed760] text-black hover:scale-105 hover:shadow-[0_0_20px_rgba(29,185,84,0.4)]'
+                    }`}
                   >
-                    {isStarting ? 'Starting...' : `Start Game (${players.length} players)`}
+                    {isStarting ? 'Starting Game...' : `Start Game (${players.length} players)`}
                   </button>
                 ) : (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-yellow-800 text-center">
+                  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 inline-block">
+                    <p className="text-yellow-200">
                       Need at least 2 players to start the game
                     </p>
                   </div>
@@ -303,215 +302,240 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
             )}
 
     {gameState === 'playing' && currentTrack && (
-      <div className="bg-white rounded-2xl shadow-2xl p-8 transition-all">
-        <div className="text-center mb-6">
-          <div className="inline-block bg-purple-100 px-6 py-2 rounded-full">
-            <span className="text-purple-800 font-bold">
-              Round {currentRound} / {totalRounds}
-            </span>
-          </div>
-          <div className="mt-4">
-            <div className="text-4xl font-bold text-gray-800">
-              {timeRemaining}s
+      <div className="glass-panel rounded-2xl p-8 transition-all relative overflow-hidden">
+        {/* Background blur of album art */}
+        {currentTrack.image_url && (
+          <div 
+            className="absolute inset-0 opacity-20 blur-3xl pointer-events-none"
+            style={{ backgroundImage: `url(${currentTrack.image_url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
+          />
+        )}
+        
+        <div className="relative z-10">
+          <div className="text-center mb-8">
+            <div className="inline-block bg-white/10 backdrop-blur-md px-6 py-2 rounded-full border border-white/10 mb-6">
+              <span className="text-spotify-green font-bold tracking-wider uppercase text-sm">
+                Round {currentRound} / {totalRounds}
+              </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+            
+            <div className="flex items-center justify-center gap-4 mb-2">
+              <div className="text-5xl font-bold text-white tabular-nums">
+                {timeRemaining}s
+              </div>
+            </div>
+            
+            <div className="w-full bg-white/10 rounded-full h-2 mt-2 overflow-hidden">
               <div
-                className="bg-purple-500 h-2 rounded-full transition-all duration-1000"
+                className="bg-spotify-green h-full rounded-full transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(29,185,84,0.5)]"
                 style={{ width: `${(timeRemaining / 30) * 100}%` }}
               ></div>
             </div>
           </div>
-        </div>
 
-        {currentTrack.image_url && (
-          <img
-            src={currentTrack.image_url}
-            alt={currentTrack.name}
-            className="w-64 h-64 mx-auto rounded-xl shadow-lg mb-6"
-          />
-        )}
-
-        <div className="text-center mb-6">
-          <h3 className="text-2xl font-bold text-gray-800">
-            {currentTrack.name}
-          </h3>
-          <p className="text-gray-600">{currentTrack.artists.join(', ')}</p>
-        </div>
-
-        {/* Simple Volume Control */}
-        {currentTrack.preview_url ? (
-          <div className="mb-6 flex items-center justify-center gap-3 bg-gray-100 rounded-lg p-4">
-            <span className="text-gray-600 text-sm">🔊 Volume:</span>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              defaultValue="0.7"
-              onChange={(e) => {
-                if (audioRef.current) {
-                  audioRef.current.volume = parseFloat(e.target.value)
-                }
-              }}
-              className="w-32"
-            />
-          </div>
-        ) : (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-            <p className="text-yellow-800 text-center">
-              🔇 No preview available for this track
-            </p>
-          </div>
-        )}
-
-        {audioError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-800 text-center text-sm">
-              {audioError}
-            </p>
-          </div>
-        )}
-
-                <h4 className="text-xl font-semibold text-gray-800 mb-4 text-center">
-                  Who listened to this the most?
-                </h4>
-
-                <div className="grid grid-cols-2 gap-4">
-                  {players.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => handleGuess(p.id)}
-                      disabled={hasGuessed}
-                      className={`py-4 px-6 rounded-lg font-bold transition-all transform ${
-                        hasGuessed
-                          ? 'bg-gray-300 cursor-not-allowed'
-                          : 'bg-purple-500 hover:bg-purple-600 text-white hover:scale-105 shadow-lg'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-6 text-center text-gray-600">
-                  {hasGuessed ? (
-                    <span className="text-green-600 font-semibold">✓ Guess submitted!</span>
-                  ) : (
-                    <span>Make your guess...</span>
-                  )}
-                  <div className="text-sm mt-2">
-                    {guessesCount} / {players.length} players have guessed
-                  </div>
-                </div>
+          <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
+            {currentTrack.image_url && (
+              <div className="relative group">
+                <img
+                  src={currentTrack.image_url}
+                  alt={currentTrack.name}
+                  className="w-32 h-32 md:w-48 md:h-48 rounded-xl shadow-2xl group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 rounded-xl shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] pointer-events-none"></div>
               </div>
             )}
 
-            {gameState === 'round_end' && roundResult && (
-              <div className="bg-white rounded-2xl shadow-2xl p-8 transition-all">
-                <h2 className="text-3xl font-bold text-center text-green-600 mb-6">
-                  Round {roundResult.round} Complete!
-                </h2>
+            <div className="text-center md:text-left flex-1">
+              <h3 className="text-2xl md:text-3xl font-bold text-white mb-2 leading-tight">
+                {currentTrack.name}
+              </h3>
+              <p className="text-lg md:text-xl text-gray-300">{currentTrack.artists.join(', ')}</p>
+              
+              {/* Simple Volume Control */}
+              {currentTrack.preview_url ? (
+                <div className="mt-6 flex items-center justify-center md:justify-start gap-3">
+                  <span className="text-gray-400 text-sm">Volume</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    defaultValue="0.7"
+                    onChange={(e) => {
+                      if (audioRef.current) {
+                        audioRef.current.volume = parseFloat(e.target.value)
+                      }
+                    }}
+                    className="w-32 accent-spotify-green"
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 text-yellow-400 text-sm flex items-center gap-2">
+                  <span>🔇</span> No preview available
+                </div>
+              )}
+            </div>
+          </div>
 
-                <div className="bg-green-50 border-2 border-green-200 rounded-xl p-6 mb-6">
-                  <p className="text-center text-lg">
-                    <strong>{players.find(p => p.id === roundResult.winner_id)?.name}</strong>{' '}
-                    had this track ranked #{roundResult.winner_rank}!
+          {audioError && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 mb-6 text-center">
+              <p className="text-red-300 text-sm">
+                {audioError}
+              </p>
+            </div>
+          )}
+
+          <div className="border-t border-white/10 pt-8">
+            <h4 className="text-xl font-semibold text-white mb-6 text-center">
+              Who has this in their top tracks?
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {players.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => handleGuess(p.id)}
+                  disabled={hasGuessed}
+                  className={`py-4 px-6 rounded-xl font-bold transition-all transform relative overflow-hidden group ${
+                    hasGuessed
+                      ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
+                      : 'glass-button hover:bg-spotify-green hover:text-black hover:border-spotify-green hover:scale-[1.02] hover:shadow-lg'
+                  }`}
+                >
+                  <span className="relative z-10">{p.name}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-6 text-center">
+              {hasGuessed ? (
+                <div className="inline-flex items-center gap-2 text-spotify-green font-bold bg-spotify-green/10 px-4 py-2 rounded-full">
+                  <span>✓</span> Guess submitted!
+                </div>
+              ) : (
+                <span className="text-gray-400 animate-pulse">Make your guess...</span>
+              )}
+              <div className="text-sm mt-3 text-gray-500">
+                {guessesCount} / {players.length} players have guessed
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+            {gameState === 'round_end' && roundResult && (
+              <div className="glass-panel rounded-2xl p-8 transition-all text-center">
+                <h2 className="text-4xl font-bold text-white mb-2">
+                  Round Complete!
+                </h2>
+                <p className="text-gray-400 mb-8">Here's how it went down...</p>
+
+                <div className="bg-linear-to-br from-purple-900/50 to-blue-900/50 border border-white/10 rounded-2xl p-8 mb-8 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-purple-500 to-blue-500"></div>
+                  <p className="text-lg text-gray-300 mb-2">The track belonged to...</p>
+                  <p className="text-4xl font-bold text-white mb-2">
+                    {players.find(p => p.id === roundResult.winner_id)?.name}
                   </p>
+                  <div className="inline-block bg-white/10 px-4 py-1 rounded-full text-sm text-gray-300">
+                    Ranked #{roundResult.winner_rank} in their top tracks
+                  </div>
                 </div>
 
-                {roundResult.correct_guessers && roundResult.correct_guessers.length > 0 && (
-                  <div className="space-y-2">
-                    <h3 className="font-bold text-gray-800">Correct Guesses:</h3>
+                {roundResult.correct_guessers && roundResult.correct_guessers.length > 0 ? (
+                  <div className="space-y-3 mb-8">
+                    <h3 className="font-bold text-gray-300 uppercase tracking-wider text-sm mb-4">Correct Guesses</h3>
                     {roundResult.correct_guessers.map((pid: string, idx: number) => (
-                      <div key={pid} className="bg-blue-50 rounded-lg p-3">
-                        <span className="font-semibold">
+                      <div key={pid} className="bg-spotify-green/10 border border-spotify-green/20 rounded-xl p-4 flex justify-between items-center">
+                        <span className="font-bold text-white">
                           {players.find(p => p.id === pid)?.name}
                         </span>
-                        <span className="text-blue-600 ml-2">
-                          +{roundResult.points_awarded[pid]} points
-                          {idx === 0 && ' ⚡ (Speed Bonus!)'}
+                        <span className="text-spotify-green font-bold flex items-center gap-2">
+                          +{roundResult.points_awarded[pid]} pts
+                          {idx === 0 && <span className="text-yellow-400 text-xs bg-yellow-400/10 px-2 py-1 rounded">⚡ FASTEST</span>}
                         </span>
                       </div>
                     ))}
                   </div>
+                ) : (
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 mb-8">
+                    <p className="text-red-300">No one guessed correctly! 😱</p>
+                  </div>
                 )}
 
-                <div className="text-center mt-6 text-gray-600">
+                <div className="text-gray-500 animate-pulse">
                   Next round starting soon...
                 </div>
               </div>
             )}
 
             {gameState === 'game_over' && (
-              <div className="bg-white rounded-2xl shadow-2xl p-8 transition-all">
+              <div className="glass-panel rounded-2xl p-8 transition-all text-center">
                 {isWinner ? (
-                  <div className="text-center">
-                    <div className="text-8xl mb-4 animate-bounce">🏆</div>
-                    <h2 className="text-5xl font-bold bg-linear-to-r from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent mb-4">
-                      YOU WON!
+                  <div className="mb-8">
+                    <div className="text-6xl md:text-8xl mb-6 animate-bounce">🏆</div>
+                    <h2 className="text-4xl md:text-6xl font-bold text-transparent bg-clip-text bg-linear-to-r from-yellow-300 via-yellow-500 to-yellow-600 mb-4">
+                      VICTORY!
                     </h2>
-                    <p className="text-2xl text-gray-700 mb-8">
-                      Congratulations, {player.name}!
+                    <p className="text-xl md:text-2xl text-gray-300 mb-8">
+                      You know your friends best, {player.name}!
                     </p>
-                    <div className="bg-linear-to-r from-yellow-100 to-yellow-50 rounded-xl p-6 mb-8">
-                      <p className="text-4xl font-bold text-yellow-700">
-                        {sortedPlayers[0]?.score} points
+                    <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-8 inline-block min-w-[200px]">
+                      <p className="text-5xl font-bold text-yellow-400 mb-2">
+                        {sortedPlayers[0]?.score}
                       </p>
-                      <p className="text-gray-600 mt-2">Final Score</p>
+                      <p className="text-yellow-200/70 uppercase tracking-wider text-sm">Final Score</p>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center">
-                    <div className="text-6xl mb-4">😔</div>
-                    <h2 className="text-4xl font-bold text-gray-700 mb-4">
+                  <div className="mb-8">
+                    <div className="text-6xl mb-6">👏</div>
+                    <h2 className="text-4xl font-bold text-white mb-4">
                       Game Over
                     </h2>
-                    <p className="text-xl text-gray-600 mb-4">
-                      Better luck next time, {player.name}!
+                    <p className="text-xl text-gray-400 mb-8">
+                      Great game, {player.name}!
                     </p>
-                    <div className="bg-gray-100 rounded-xl p-6 mb-8">
-                      <p className="text-3xl font-bold text-gray-700">
-                        {players.find(p => p.id === player.id)?.score} points
+                    <div className="bg-white/5 rounded-2xl p-6 mb-8 inline-block min-w-[200px]">
+                      <p className="text-4xl font-bold text-white mb-2">
+                        {players.find(p => p.id === player.id)?.score}
                       </p>
-                      <p className="text-gray-600 mt-2">
-                        You finished #{sortedPlayers.findIndex(p => p.id === player.id) + 1}
-                      </p>
-                    </div>
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 mb-6">
-                      <p className="font-semibold text-yellow-800 mb-2">👑 Winner:</p>
-                      <p className="text-xl text-gray-800">
-                        {sortedPlayers[0]?.name} - {sortedPlayers[0]?.score} points
+                      <p className="text-gray-500 uppercase tracking-wider text-sm">Your Score</p>
+                      <p className="text-gray-400 mt-2 text-sm">
+                        Rank #{sortedPlayers.findIndex(p => p.id === player.id) + 1}
                       </p>
                     </div>
                   </div>
                 )}
 
-                <div className="mt-8">
-                  <h3 className="text-2xl font-bold text-center text-gray-800 mb-4">
+                <div className="max-w-md mx-auto">
+                  <h3 className="text-xl font-bold text-gray-300 mb-6 uppercase tracking-wider">
                     Final Standings
                   </h3>
                   <div className="space-y-3">
                     {sortedPlayers.map((p, idx) => (
                       <div
                         key={p.id}
-                        className={`flex justify-between items-center p-4 rounded-lg transition-all ${
+                        className={`flex justify-between items-center p-4 rounded-xl transition-all ${
                           idx === 0
-                            ? 'bg-linear-to-r from-yellow-400 to-yellow-300 text-yellow-900 transform scale-105'
+                            ? 'bg-linear-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500/50 transform scale-105 shadow-lg'
                             : p.id === player.id
-                            ? 'bg-blue-100 border-2 border-blue-400'
-                            : 'bg-gray-100'
+                            ? 'bg-white/10 border border-white/30'
+                            : 'bg-white/5 border border-white/5'
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl font-bold">
-                            {idx === 0 ? '👑' : `#${idx + 1}`}
+                        <div className="flex items-center gap-4">
+                          <span className={`text-2xl font-bold w-8 ${idx === 0 ? 'text-yellow-400' : 'text-gray-500'}`}>
+                            {idx === 0 ? '1' : idx + 1}
                           </span>
-                          <span className="font-semibold text-lg">
-                            {p.name}
-                            {p.id === player.id && ' (You)'}
-                          </span>
+                          <div className="text-left">
+                            <p className={`font-bold ${idx === 0 ? 'text-yellow-200' : 'text-white'}`}>
+                              {p.name} {p.id === player.id && '(You)'}
+                            </p>
+                            {idx === 0 && <span className="text-xs text-yellow-500/80 uppercase font-bold">Winner</span>}
+                          </div>
                         </div>
-                        <span className="text-2xl font-bold">{p.score} pts</span>
+                        <span className="text-2xl font-bold text-white">{p.score}</span>
                       </div>
                     ))}
                   </div>
@@ -519,7 +543,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
 
                 <button
                   onClick={handleLeave}
-                  className="w-full mt-8 bg-purple-500 hover:bg-purple-600 text-white font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-105"
+                  className="w-full mt-12 glass-button hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl transition-all"
                 >
                   Back to Lobby
                 </button>
@@ -527,21 +551,25 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
             )}
           </div>
 
-          <div className="bg-white rounded-2xl shadow-2xl p-6 transition-all">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Players</h3>
+          <div className="glass-panel rounded-2xl p-6 transition-all h-fit">
+            <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+              <span>👥</span> Players
+            </h3>
             <div className="space-y-3">
               {players.map((p) => (
                 <div
                   key={p.id}
                   className={`flex justify-between items-center p-3 rounded-lg transition-all ${
-                    p.id === player.id ? 'bg-purple-100 border-2 border-purple-300' : 'bg-gray-50'
+                    p.id === player.id 
+                      ? 'bg-spotify-green/10 border border-spotify-green/30' 
+                      : 'bg-white/5 border border-white/5'
                   }`}
                 >
-                  <span className="font-semibold">
+                  <span className={`font-semibold ${p.id === player.id ? 'text-spotify-green' : 'text-gray-300'}`}>
                     {p.name}
                     {p.id === player.id && ' (You)'}
                   </span>
-                  <span className="text-purple-600 font-bold">{p.score}</span>
+                  <span className="text-white font-bold bg-black/20 px-2 py-1 rounded text-sm">{p.score}</span>
                 </div>
               ))}
             </div>
