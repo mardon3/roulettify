@@ -221,22 +221,22 @@ export default function Lobby({ player, isAuthenticated, onJoinRoom }: LobbyProp
           <h3 className="font-bold text-white mb-4 flex items-center gap-2">
             <span className="text-xl">💡</span> How to Play
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-start gap-3">
-              <span className="bg-white/10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-spotify-green">1</span>
-              <p>Listen to 30-second track previews from everyone's top songs</p>
+          <div className="space-y-4">
+            <div className="flex items-start gap-4 bg-white/5 p-3 rounded-xl">
+              <span className="bg-spotify-green text-black w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 shadow-[0_0_10px_rgba(29,185,84,0.3)]">1</span>
+              <p className="mt-1">Listen to 30-second track previews from everyone's top songs. The artist and track name are hidden!</p>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="bg-white/10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-spotify-green">2</span>
-              <p>Guess which friend has the track in their top 50</p>
+            <div className="flex items-start gap-4 bg-white/5 p-3 rounded-xl">
+              <span className="bg-spotify-green text-black w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 shadow-[0_0_10px_rgba(29,185,84,0.3)]">2</span>
+              <p className="mt-1">Guess which friend has this track in their top 50 most played songs.</p>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="bg-white/10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-spotify-green">3</span>
-              <p>Earn points for speed and accuracy</p>
+            <div className="flex items-start gap-4 bg-white/5 p-3 rounded-xl">
+              <span className="bg-spotify-green text-black w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 shadow-[0_0_10px_rgba(29,185,84,0.3)]">3</span>
+              <p className="mt-1">Earn points for correct guesses. The faster you guess, the more points you get!</p>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="bg-white/10 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-spotify-green">4</span>
-              <p>Win by knowing your friends' music taste best!</p>
+            <div className="flex items-start gap-4 bg-white/5 p-3 rounded-xl">
+              <span className="bg-spotify-green text-black w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold shrink-0 shadow-[0_0_10px_rgba(29,185,84,0.3)]">4</span>
+              <p className="mt-1">Win by knowing your friends' music taste best!</p>
             </div>
           </div>
         </div>
