@@ -10,6 +10,7 @@ interface PlayerInfo {
   id: string
   name: string
   score: number
+  is_ready: boolean
 }
 
 interface Track {
@@ -45,6 +46,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
   const [gameState, setGameState] = useState<'waiting' | 'playing' | 'round_end' | 'game_over'>('waiting')
   const [currentRound, setCurrentRound] = useState(0)
   const [totalRounds, setTotalRounds] = useState(10)
+  const [isReady, setIsReady] = useState(false)
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null)
   const [hasGuessed, setHasGuessed] = useState(false)
   const [guessesCount, setGuessesCount] = useState(0)
@@ -85,6 +87,14 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
 
         case 'player_left':
           setPlayers(message.payload.players || [])
+          break
+
+        case 'player_ready':
+          setPlayers(prev => prev.map(p => 
+            p.id === message.payload.player_id 
+              ? { ...p, is_ready: message.payload.is_ready }
+              : p
+          ))
           break
 
         case 'game_started':
@@ -187,6 +197,19 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
     }
   }
 
+  const handleReady = () => {
+    if (wsRef.current) {
+      const newReadyState = !isReady
+      setIsReady(newReadyState)
+      wsRef.current.send(JSON.stringify({
+        type: 'ready',
+        payload: {
+          is_ready: newReadyState,
+        },
+      }))
+    }
+  }
+
   const handleGuess = (guessedPlayerId: string) => {
     if (wsRef.current && !hasGuessed) {
       wsRef.current.send(JSON.stringify({
@@ -254,7 +277,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
         
         <div className="glass-panel rounded-2xl p-6 mb-6 transition-all flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+            <h1 className="text-xl md:text-3xl font-bold text-white flex items-center gap-3">
               <span className="text-spotify-green">Room:</span> {roomId}
             </h1>
             <p className="text-gray-400">Playing as: <span className="text-white font-semibold">{player.name}</span></p>
@@ -280,17 +303,34 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                   {players.length} player{players.length !== 1 ? 's' : ''} in room
                 </p>
                 
+                <div className="flex flex-col items-center gap-4 mb-8">
+                  <button
+                    onClick={handleReady}
+                    className={`px-8 py-3 rounded-full font-bold text-lg transition-all transform hover:scale-105 ${
+                      isReady
+                        ? 'bg-green-500/20 text-green-400 border-2 border-green-500'
+                        : 'bg-gray-600 text-white hover:bg-gray-500'
+                    }`}
+                  >
+                    {isReady ? '✓ Ready!' : 'Click to Ready Up'}
+                  </button>
+                </div>
+
                 {players.length >= 2 ? (
                   <button
                     onClick={handleStartGame}
-                    disabled={isStarting}
+                    disabled={isStarting || !players.every(p => p.is_ready)}
                     className={`w-full font-bold py-4 px-6 rounded-full transition-all transform shadow-lg text-lg ${
-                      isStarting 
+                      isStarting || !players.every(p => p.is_ready)
                         ? 'bg-gray-600 cursor-not-allowed opacity-50' 
                         : 'bg-spotify-green hover:bg-[#1ed760] text-black hover:scale-105 hover:shadow-[0_0_20px_rgba(29,185,84,0.4)]'
                     }`}
                   >
-                    {isStarting ? 'Starting Game...' : `Start Game (${players.length} players)`}
+                    {isStarting 
+                      ? 'Starting Game...' 
+                      : !players.every(p => p.is_ready)
+                        ? 'Waiting for players to ready up...'
+                        : `Start Game (${players.length} players)`}
                   </button>
                 ) : (
                   <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 inline-block">
@@ -335,7 +375,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
           </div>
 
           <div className="flex flex-col md:flex-row items-center gap-8 mb-8">
-            {currentTrack.image_url && (
+            {currentTrack.image_url ? (
               <div className="relative group">
                 <img
                   src={currentTrack.image_url}
@@ -343,6 +383,10 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                   className="w-32 h-32 md:w-48 md:h-48 rounded-xl shadow-2xl group-hover:scale-105 transition-transform duration-500"
                 />
                 <div className="absolute inset-0 rounded-xl shadow-[inset_0_0_20px_rgba(0,0,0,0.5)] pointer-events-none"></div>
+              </div>
+            ) : (
+              <div className="w-32 h-32 md:w-48 md:h-48 rounded-xl bg-gray-800 flex items-center justify-center shadow-2xl border border-white/10">
+                <span className="text-4xl">❓</span>
               </div>
             )}
 
@@ -354,7 +398,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
               
               {/* Simple Volume Control */}
               {currentTrack.preview_url ? (
-                <div className="mt-6 flex items-center justify-center md:justify-start gap-3">
+                <div className="mt-6 hidden md:flex items-center justify-center md:justify-start gap-3">
                   <span className="text-gray-400 text-sm">Volume</span>
                   <input
                     type="range"
@@ -434,12 +478,26 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
 
                 <div className="bg-linear-to-br from-purple-900/50 to-blue-900/50 border border-white/10 rounded-2xl p-8 mb-8 relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-linear-to-r from-purple-500 to-blue-500"></div>
-                  <p className="text-lg text-gray-300 mb-2">The track belonged to...</p>
-                  <p className="text-4xl font-bold text-white mb-2">
-                    {players.find(p => p.id === roundResult.winner_id)?.name}
-                  </p>
-                  <div className="inline-block bg-white/10 px-4 py-1 rounded-full text-sm text-gray-300">
-                    Ranked #{roundResult.winner_rank} in their top tracks
+                  
+                  {/* Revealed Track Info */}
+                  <div className="flex flex-col items-center mb-6">
+                    <img 
+                      src={roundResult.track.image_url} 
+                      alt={roundResult.track.name}
+                      className="w-32 h-32 rounded-lg shadow-xl mb-4"
+                    />
+                    <h3 className="text-2xl font-bold text-white">{roundResult.track.name}</h3>
+                    <p className="text-gray-300">{roundResult.track.artists.join(', ')}</p>
+                  </div>
+
+                  <div className="border-t border-white/10 pt-4">
+                    <p className="text-lg text-gray-300 mb-2">The track belonged to...</p>
+                    <p className="text-4xl font-bold text-white mb-2">
+                      {players.find(p => p.id === roundResult.winner_id)?.name}
+                    </p>
+                    <div className="inline-block bg-white/10 px-4 py-1 rounded-full text-sm text-gray-300">
+                      Ranked #{roundResult.winner_rank} in their top tracks
+                    </div>
                   </div>
                 </div>
 
@@ -570,7 +628,18 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                     {p.name}
                     {p.id === player.id && ' (You)'}
                   </span>
-                  <span className="text-white font-bold bg-black/20 px-2 py-1 rounded text-sm">{p.score}</span>
+                  <div className="flex items-center gap-2">
+                    {gameState === 'waiting' && (
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        p.is_ready 
+                          ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                          : 'bg-gray-700 text-gray-400'
+                      }`}>
+                        {p.is_ready ? 'READY' : 'NOT READY'}
+                      </span>
+                    )}
+                    <span className="text-white font-bold bg-black/20 px-2 py-1 rounded text-sm">{p.score}</span>
+                  </div>
                 </div>
               ))}
             </div>

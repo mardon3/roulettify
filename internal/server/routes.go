@@ -178,6 +178,9 @@ func (s *Server) HandleWebSocket(c *gin.Context) {
 		switch msg.Type {
 		case game.MsgTypeJoinRoom:
 			currentRoom, currentPlayer = s.handleJoinRoom(ctx, conn, msg.Payload)
+
+		case game.MsgTypeReady:
+			s.handlePlayerReady(currentRoom, currentPlayer, msg.Payload)
 			
 		case game.MsgTypeStartGame:
 			s.handleStartGame(currentRoom, msg.Payload)
@@ -246,6 +249,19 @@ func (s *Server) handleJoinRoom(ctx context.Context, conn *websocket.Conn, paylo
 	return room, player
 }
 
+func (s *Server) handlePlayerReady(room *game.GameRoom, player *game.Player, payload interface{}) {
+	if room == nil || player == nil {
+		return
+	}
+
+	data, _ := json.Marshal(payload)
+	var readyPayload game.ReadyPayload
+	json.Unmarshal(data, &readyPayload)
+
+	readyPayload.PlayerID = player.ID
+	room.Ready <- readyPayload
+}
+
 func (s *Server) handleStartGame(room *game.GameRoom, payload interface{}) {
 	if room == nil {
 		return
@@ -255,12 +271,11 @@ func (s *Server) handleStartGame(room *game.GameRoom, payload interface{}) {
 	var startPayload game.StartGamePayload
 	json.Unmarshal(data, &startPayload)
 
-	totalRounds := startPayload.TotalRounds
-	if totalRounds <= 0 {
-		totalRounds = 10
+	if startPayload.TotalRounds <= 0 {
+		startPayload.TotalRounds = 10
 	}
 
-	room.StartGame <- totalRounds
+	room.StartGame <- startPayload
 }
 
 func (s *Server) handleSubmitGuess(room *game.GameRoom, player *game.Player, payload interface{}) {

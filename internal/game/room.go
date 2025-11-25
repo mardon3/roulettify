@@ -24,14 +24,16 @@ type GameRoom struct {
 	TotalRounds  int
 	CurrentTrack *auth.Track
 	Guesses      map[string]Guess
+	PlayedTracks map[string]bool
 	State        GameState
 	RoundTimer   *time.Timer
 
 	// Channels
 	Join      chan *Player
 	Leave     chan string
+	Ready     chan ReadyPayload
 	Guess     chan Guess
-	StartGame chan int
+	StartGame chan StartGamePayload
 	Broadcast chan Message
 
 	mu sync.RWMutex
@@ -44,11 +46,13 @@ func NewGameRoom(id string) *GameRoom {
 		PlayerOrder:  make([]string, 0),
 		Scores:       make(map[string]int),
 		Guesses:      make(map[string]Guess),
+		PlayedTracks: make(map[string]bool),
 		State:        StateWaiting,
 		Join:         make(chan *Player, 10),
 		Leave:        make(chan string, 10),
+		Ready:        make(chan ReadyPayload, 10),
 		Guess:        make(chan Guess, 10),
-		StartGame:    make(chan int, 1),
+		StartGame:    make(chan StartGamePayload, 1),
 		Broadcast:    make(chan Message, 10),
 	}
 }
@@ -69,8 +73,11 @@ func (r *GameRoom) Run() {
 		case playerID := <-r.Leave:
 			r.handlePlayerLeave(playerID)
 
-		case totalRounds := <-r.StartGame:
-			r.handleGameStart(totalRounds)
+		case payload := <-r.Ready:
+			r.handlePlayerReady(payload)
+
+		case payload := <-r.StartGame:
+			r.handleGameStart(payload)
 
 		case guess := <-r.Guess:
 			r.handleGuess(guess)
@@ -98,6 +105,7 @@ func (r *GameRoom) handlePlayerJoin(player *Player) {
 	}
 
 	// Add player
+	player.IsReady = false
 	r.Players[player.ID] = player
 	r.PlayerOrder = append(r.PlayerOrder, player.ID)
 	r.Scores[player.ID] = 0
@@ -168,7 +176,28 @@ func (r *GameRoom) handlePlayerLeave(playerID string) {
 	}
 }
 
-func (r *GameRoom) handleGameStart(totalRounds int) {
+func (r *GameRoom) handlePlayerReady(payload ReadyPayload) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	player, exists := r.Players[payload.PlayerID]
+	if !exists {
+		return
+	}
+
+	player.IsReady = payload.IsReady
+	log.Printf("Player %s is ready: %v", player.Name, payload.IsReady)
+
+	r.Broadcast <- Message{
+		Type: MsgTypePlayerReady,
+		Payload: map[string]interface{}{
+			"player_id": payload.PlayerID,
+			"is_ready":  payload.IsReady,
+		},
+	}
+}
+
+func (r *GameRoom) handleGameStart(payload StartGamePayload) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -186,16 +215,31 @@ func (r *GameRoom) handleGameStart(totalRounds int) {
 		return
 	}
 
-	r.TotalRounds = totalRounds
+	// Check if all players are ready
+	for _, p := range r.Players {
+		if !p.IsReady {
+			r.Broadcast <- Message{
+				Type: MsgTypeError,
+				Payload: map[string]interface{}{
+					"message": "All players must be ready to start",
+				},
+			}
+			return
+		}
+	}
+
+	r.TotalRounds = payload.TotalRounds
 	r.CurrentRound = 0
 	r.State = StatePlaying
+	r.PlayedTracks = make(map[string]bool) // Reset played tracks
 
-	log.Printf("Game started in room %s with %d rounds", r.ID, totalRounds)
+	log.Printf("Game started in room %s with %d rounds", 
+		r.ID, payload.TotalRounds)
 
 	r.Broadcast <- Message{
 		Type: MsgTypeGameStarted,
 		Payload: map[string]interface{}{
-			"total_rounds": totalRounds,
+			"total_rounds": payload.TotalRounds,
 			"players":      r.getPlayerInfoList(),
 		},
 	}
@@ -227,15 +271,22 @@ func (r *GameRoom) startNextRound() {
 	}
 
 	r.CurrentTrack = track
+	r.PlayedTracks[track.ID] = true
 
 	log.Printf("Round %d/%d started in room %s - Track: %s", r.CurrentRound, r.TotalRounds, r.ID, track.Name)
+
+	broadcastTrack := *track
+	broadcastTrack.Name = "???"
+	broadcastTrack.Artists = []string{"???"}
+	broadcastTrack.ImageURL = "" // Hide album art
+	// Keep PreviewURL and ID
 
 	r.Broadcast <- Message{
 		Type: MsgTypeRoundStarted,
 		Payload: map[string]interface{}{
 			"round":        r.CurrentRound,
 			"total_rounds": r.TotalRounds,
-			"track":        track,
+			"track":        broadcastTrack,
 			"players":      r.getPlayerInfoList(),
 		},
 	}
@@ -342,6 +393,10 @@ func (r *GameRoom) selectTrack() *auth.Track {
 
 	for _, player := range r.Players {
 		for _, track := range player.TopTracks {
+			// Skip if already played
+			if r.PlayedTracks[track.ID] {
+				continue
+			}
 			trackCounts[track.ID]++
 			if _, exists := trackMap[track.ID]; !exists {
 				t := track
@@ -358,11 +413,34 @@ func (r *GameRoom) selectTrack() *auth.Track {
 		}
 	}
 
-	// Fall back to all tracks if no common ones
-	if len(commonTracks) == 0 {
+	// If we don't have enough common tracks (at least 10), fill with other tracks
+	if len(commonTracks) < 10 {
+		otherTracks := make([]string, 0)
 		for trackID := range trackMap {
-			commonTracks = append(commonTracks, trackID)
+			// Check if it's already in commonTracks
+			isCommon := false
+			for _, commonID := range commonTracks {
+				if commonID == trackID {
+					isCommon = true
+					break
+				}
+			}
+			if !isCommon {
+				otherTracks = append(otherTracks, trackID)
+			}
 		}
+
+		// Shuffle other tracks
+		rand.Shuffle(len(otherTracks), func(i, j int) {
+			otherTracks[i], otherTracks[j] = otherTracks[j], otherTracks[i]
+		})
+
+		// Fill commonTracks until we have 10 or run out
+		needed := 10 - len(commonTracks)
+		if needed > len(otherTracks) {
+			needed = len(otherTracks)
+		}
+		commonTracks = append(commonTracks, otherTracks[:needed]...)
 	}
 
 	if len(commonTracks) == 0 {
@@ -456,9 +534,10 @@ func (r *GameRoom) getPlayerInfoList() []PlayerInfo {
 	for _, id := range r.PlayerOrder {
 		if player, exists := r.Players[id]; exists {
 			players = append(players, PlayerInfo{
-				ID:    player.ID,
-				Name:  player.Name,
-				Score: r.Scores[player.ID],
+				ID:      player.ID,
+				Name:    player.Name,
+				Score:   r.Scores[player.ID],
+				IsReady: player.IsReady,
 			})
 		}
 	}
