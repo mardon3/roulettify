@@ -40,13 +40,6 @@ A real-time multiplayer web game where players guess which friend has listened t
 - **Docker** multi-stage builds
 - **Cloud-ready** (optimized for low-memory deployments)
 
-## 📋 Prerequisites
-
-- **Go 1.25+**
-- **Node.js 18+** and npm
-- **Spotify Developer account** ([create one here](https://developer.spotify.com/dashboard))
-- **Docker & Docker Compose** (optional, for containerized deployment)
-
 ## 📁 Project Structure
 
 ```
@@ -217,7 +210,7 @@ make run
 # Build and run with Docker Compose
 make docker-run
 
-# Access at http://localhost:8080
+# Access at http://127.0.0.1:8080
 ```
 
 ### Testing
@@ -245,15 +238,15 @@ PORT=8080
 APP_ENV=development
 
 # Frontend
-FRONTEND_URL=http://localhost:5173
+FRONTEND_URL=http://127.0.0.1:5173
 
 # Spotify (Get from https://developer.spotify.com/dashboard)
 SPOTIFY_CLIENT_ID=your_client_id_here
 SPOTIFY_CLIENT_SECRET=your_client_secret_here
-SPOTIFY_REDIRECT_URI=http://localhost:8080/auth/callback
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:8080/auth/callback
 
 # CORS
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+ALLOWED_ORIGINS=http://127.0.0.1:3000,http://127.0.0.1:5173
 
 # Game Settings
 DEFAULT_TOTAL_ROUNDS=10
@@ -264,7 +257,7 @@ MAX_PLAYERS_PER_ROOM=6
 
 1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 2. Create a new app
-3. Add redirect URI: `http://localhost:8080/auth/callback`
+3. Add redirect URI: `http://127.0.0.1:8080/auth/callback`
 4. Copy Client ID and Client Secret to `.env`
 5. For production, add your production URL to redirect URIs
 
