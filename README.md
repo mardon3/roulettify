@@ -5,7 +5,7 @@ A real-time multiplayer web game where players guess which friend has listened t
 ## 🎮 How It Works
 
 1. **Authenticate** with Spotify
-2. **Join one of 3 persistent rooms** (max 6 players per room)
+2. **Join one of 3 persistent rooms** (max 10 players per room)
 3. **Listen** to 30-second track previews
 4. **Guess** which player has that track ranked highest in their top 50
 5. **Earn points** for correct guesses (10 pts + 5 pts speed bonus)
@@ -16,11 +16,13 @@ A real-time multiplayer web game where players guess which friend has listened t
 - **Spotify OAuth2 Integration**: Securely authenticate and fetch your top 50 tracks
 - **Real-time Multiplayer**: WebSocket-powered live game updates
 - **3 Persistent Rooms**: Always-available game rooms (Room 1, Room 2, Room 3)
-- **Capacity Management**: Max 6 players per room (18 concurrent players total)
+- **Capacity Management**: Max 10 players per room (30 concurrent players total)
 - **Audio Previews**: 30-second Spotify track snippets for each round (scraped from embeds)
 - **Dynamic Scoring**: 10 base points + 5 bonus for fastest correct guess
 - **Persistent Rankings**: Tracks final standings and winner announcement
 - **Optimized Architecture**: Persistent rooms with no cleanup overhead for efficient hosting
+- **Smart Tie-Breaking**: Dense ranking system ensures fair placement for tied scores
+- **Live Leaderboard**: Real-time sorting of players by score during the game
 
 ## 🛠 Technology Stack
 
@@ -77,11 +79,11 @@ roulettify/
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| GET | `/` | Health check |
-| GET | `/health` | Detailed metrics |
+| GET | `/` | Health check / SPA Entry |
+| GET | `/health` | Detailed metrics (uptime, room stats) |
 | GET | `/rooms` | List all 3 persistent rooms with player counts |
-| GET | `/auth/spotify` | Start Spotify OAuth |
-| GET | `/auth/callback` | OAuth callback |
+| GET | `/auth/spotify` | Start Spotify OAuth flow |
+| GET | `/auth/callback` | Spotify OAuth callback handler |
 
 ### WebSocket (`/ws`)
 
@@ -95,6 +97,16 @@ roulettify/
     "player_id": "user123",
     "player_name": "John",
     "access_token": "spotify_token"
+  }
+}
+```
+
+```json
+{
+  "type": "ready",
+  "payload": {
+    "player_id": "user123",
+    "is_ready": true
   }
 }
 ```
@@ -126,8 +138,30 @@ roulettify/
 {
   "type": "player_joined",
   "payload": {
-    "players": [...],
-    "player_count": 2
+    "players": [
+      { "id": "user123", "name": "John", "score": 0, "is_ready": false, "is_leader": true }
+    ],
+    "player_count": 1
+  }
+}
+```
+
+```json
+{
+  "type": "player_ready",
+  "payload": {
+    "player_id": "user123",
+    "is_ready": true
+  }
+}
+```
+
+```json
+{
+  "type": "game_started",
+  "payload": {
+    "total_rounds": 10,
+    "players": [...]
   }
 }
 ```
@@ -152,6 +186,17 @@ roulettify/
 
 ```json
 {
+  "type": "guess_received",
+  "payload": {
+    "player_id": "user123",
+    "guesses_count": 1,
+    "total_players": 2
+  }
+}
+```
+
+```json
+{
   "type": "round_complete",
   "payload": {
     "round": 1,
@@ -159,7 +204,8 @@ roulettify/
     "winner_rank": 5,
     "correct_guessers": ["user123"],
     "points_awarded": {"user123": 15},
-    "updated_scores": {"user123": 15, "friend456": 0}
+    "updated_scores": {"user123": 15, "friend456": 0},
+    "guess_durations": {"user123": 2.5}
   }
 }
 ```
@@ -169,7 +215,26 @@ roulettify/
   "type": "game_over",
   "payload": {
     "winner_id": "user123",
-    "final_scores": {"user123": 85, "friend456": 60}
+    "final_scores": {"user123": 85, "friend456": 60},
+    "players": [...]
+  }
+}
+```
+
+```json
+{
+  "type": "game_reset",
+  "payload": {
+    "players": [...]
+  }
+}
+```
+
+```json
+{
+  "type": "error",
+  "payload": {
+    "message": "Room is full"
   }
 }
 ```
@@ -250,7 +315,7 @@ ALLOWED_ORIGINS=http://127.0.0.1:3000,http://127.0.0.1:5173
 
 # Game Settings
 DEFAULT_TOTAL_ROUNDS=10
-MAX_PLAYERS_PER_ROOM=6
+MAX_PLAYERS_PER_ROOM=10
 ```
 
 ### Spotify Developer Setup
@@ -265,7 +330,7 @@ MAX_PLAYERS_PER_ROOM=6
 
 ### Persistent Room System
 - **3 fixed rooms** (Room 1, Room 2, Room 3) created at startup
-- **6 player capacity** per room (18 total concurrent players)
+- **10 player capacity** per room (30 total concurrent players)
 - **No dynamic creation/deletion** - rooms never shut down
 - **Memory efficient** - optimized for low-memory cloud deployments
 - **Consistent ordering** - rooms always appear in the same order in UI
@@ -280,7 +345,7 @@ As of Nov 2024, Spotify no longer provides preview URLs via API for new applicat
 ## 📊 Performance
 
 - **Memory**: 3 persistent rooms
-- **Concurrent Users**: Up to 18 (6 per room)
+- **Concurrent Users**: Up to 30 (10 per room)
 - **WebSocket Connections**: Persistent per player
 - **Latency**: <100ms for game actions
 - **Deployment**: Minimal resource usage 
