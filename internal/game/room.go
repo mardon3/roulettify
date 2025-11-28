@@ -13,7 +13,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 )
 
-const MaxPlayersPerRoom = 6
+const MaxPlayersPerRoom = 10
 
 type GameRoom struct {
 	ID           string
@@ -27,6 +27,8 @@ type GameRoom struct {
 	PlayedTracks map[string]bool
 	State        GameState
 	RoundTimer   *time.Timer
+	LeaderID     string
+	RoundStartTime time.Time
 
 	// Channels
 	Join      chan *Player
@@ -98,7 +100,7 @@ func (r *GameRoom) handlePlayerJoin(player *Player) {
 		r.Broadcast <- Message{
 			Type: MsgTypeError,
 			Payload: map[string]interface{}{
-				"message": "Room is full (maximum 6 players)",
+				"message": "Room is full (maximum 10 players)",
 			},
 		}
 		return
@@ -106,6 +108,15 @@ func (r *GameRoom) handlePlayerJoin(player *Player) {
 
 	// Add player
 	player.IsReady = false
+	player.IsLeader = false
+	
+	// Assign leader if room is empty
+	if len(r.Players) == 0 {
+		player.IsLeader = true
+		r.LeaderID = player.ID
+		log.Printf("Player %s assigned as leader of room %s", player.Name, r.ID)
+	}
+
 	r.Players[player.ID] = player
 	r.PlayerOrder = append(r.PlayerOrder, player.ID)
 	r.Scores[player.ID] = 0
@@ -117,9 +128,10 @@ func (r *GameRoom) handlePlayerJoin(player *Player) {
 		Type: MsgTypePlayerJoined,
 		Payload: map[string]interface{}{
 			"player": PlayerInfo{
-				ID:    player.ID,
-				Name:  player.Name,
-				Score: 0,
+				ID:       player.ID,
+				Name:     player.Name,
+				Score:    0,
+				IsLeader: player.IsLeader,
 			},
 			"player_count": len(r.Players),
 			"players":      r.getPlayerInfoList(),
@@ -151,6 +163,18 @@ func (r *GameRoom) handlePlayerLeave(playerID string) {
 			r.PlayerOrder = append(r.PlayerOrder[:i], r.PlayerOrder[i+1:]...)
 			break
 		}
+	}
+
+	// Reassign leader if needed
+	if playerID == r.LeaderID && len(r.PlayerOrder) > 0 {
+		newLeaderID := r.PlayerOrder[0]
+		r.LeaderID = newLeaderID
+		if p, ok := r.Players[newLeaderID]; ok {
+			p.IsLeader = true
+			log.Printf("Player %s is now the leader of room %s", p.Name, r.ID)
+		}
+	} else if len(r.PlayerOrder) == 0 {
+		r.LeaderID = ""
 	}
 
 	log.Printf("Player %s left room %s", player.Name, r.ID)
@@ -185,6 +209,28 @@ func (r *GameRoom) handlePlayerReady(payload ReadyPayload) {
 		return
 	}
 
+	// Check if we need to reset the game from Game Over state
+	if r.State == StateGameOver {
+		r.State = StateWaiting
+		r.CurrentRound = 0
+		r.Scores = make(map[string]int)
+		for pid := range r.Players {
+			r.Scores[pid] = 0
+			if p, ok := r.Players[pid]; ok {
+				p.IsReady = false
+			}
+		}
+
+		log.Printf("Room %s reset to waiting state by player %s", r.ID, player.Name)
+
+		r.Broadcast <- Message{
+			Type: MsgTypeGameReset,
+			Payload: map[string]interface{}{
+				"players": r.getPlayerInfoList(),
+			},
+		}
+	}
+
 	player.IsReady = payload.IsReady
 	log.Printf("Player %s is ready: %v", player.Name, payload.IsReady)
 
@@ -201,10 +247,20 @@ func (r *GameRoom) handleGameStart(payload StartGamePayload) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	// Auto-fix state if we are stuck in GameOver but trying to start
+	if r.State == StateGameOver {
+		r.State = StateWaiting
+		r.CurrentRound = 0
+		r.Scores = make(map[string]int)
+		for pid := range r.Players {
+			r.Scores[pid] = 0
+		}
+	}
+
 	if r.State != StateWaiting {
 		return
 	}
-
+	
 	if len(r.Players) < 2 {
 		r.Broadcast <- Message{
 			Type: MsgTypeError,
@@ -229,6 +285,10 @@ func (r *GameRoom) handleGameStart(payload StartGamePayload) {
 	}
 
 	r.TotalRounds = payload.TotalRounds
+	if r.TotalRounds <= 0 {
+		r.TotalRounds = 10 // Default
+	}
+	
 	r.CurrentRound = 0
 	r.State = StatePlaying
 	r.PlayedTracks = make(map[string]bool) // Reset played tracks
@@ -244,9 +304,9 @@ func (r *GameRoom) handleGameStart(payload StartGamePayload) {
 		},
 	}
 
-	// Start first round after 2 seconds
+	// Start first round after 5 seconds (intermission)
 	go func() {
-		time.Sleep(2 * time.Second)
+		time.Sleep(5 * time.Second)
 		r.startNextRound()
 	}()
 }
@@ -256,6 +316,7 @@ func (r *GameRoom) startNextRound() {
 	defer r.mu.Unlock()
 
 	r.CurrentRound++
+	r.RoundStartTime = time.Now()
 	r.Guesses = make(map[string]Guess)
 
 	// Select track
@@ -351,29 +412,22 @@ func (r *GameRoom) endRound() {
 
 	// Check if game is over
 	if r.CurrentRound >= r.TotalRounds {
-		r.State = StateGameOver
-		
-		winnerID := r.getWinnerID()
-		log.Printf("Game over in room %s - Winner: %s", r.ID, winnerID)
-
-		r.Broadcast <- Message{
-			Type: MsgTypeGameOver,
-			Payload: map[string]interface{}{
-				"winner_id":    winnerID,
-				"final_scores": r.Scores,
-				"players":      r.getPlayerInfoList(),
-			},
-		}
-
-		// Reset room to waiting state after 10 seconds
+		// Wait 5 seconds before showing game over screen
 		go func() {
-			time.Sleep(10 * time.Second)
+			time.Sleep(5 * time.Second)
 			r.mu.Lock()
-			r.State = StateWaiting
-			r.CurrentRound = 0
-			r.Scores = make(map[string]int)
-			for pid := range r.Players {
-				r.Scores[pid] = 0
+			r.State = StateGameOver
+			
+			winnerID := r.getWinnerID()
+			log.Printf("Game over in room %s - Winner: %s", r.ID, winnerID)
+
+			r.Broadcast <- Message{
+				Type: MsgTypeGameOver,
+				Payload: map[string]interface{}{
+					"winner_id":    winnerID,
+					"final_scores": r.Scores,
+					"players":      r.getPlayerInfoList(),
+				},
 			}
 			r.mu.Unlock()
 		}()
@@ -405,50 +459,29 @@ func (r *GameRoom) selectTrack() *auth.Track {
 		}
 	}
 
-	// Prefer tracks that appear in multiple players' libraries
-	commonTracks := make([]string, 0)
+	// Weighted selection: tracks appearing for multiple users get higher weight
+	// Create a pool where tracks are added 'count' times (or count^2 for more weight)
+	weightedPool := make([]string, 0)
+	
 	for trackID, count := range trackCounts {
-		if count >= 2 {
-			commonTracks = append(commonTracks, trackID)
+		// Base weight is 1
+		weight := 1
+		// If track appears for multiple users, increase weight significantly
+		if count > 1 {
+			weight = count * 5 // Give 5x weight per occurrence if shared
+		}
+		
+		for i := 0; i < weight; i++ {
+			weightedPool = append(weightedPool, trackID)
 		}
 	}
 
-	// If we don't have enough common tracks (at least 10), fill with other tracks
-	if len(commonTracks) < 10 {
-		otherTracks := make([]string, 0)
-		for trackID := range trackMap {
-			// Check if it's already in commonTracks
-			isCommon := false
-			for _, commonID := range commonTracks {
-				if commonID == trackID {
-					isCommon = true
-					break
-				}
-			}
-			if !isCommon {
-				otherTracks = append(otherTracks, trackID)
-			}
-		}
-
-		// Shuffle other tracks
-		rand.Shuffle(len(otherTracks), func(i, j int) {
-			otherTracks[i], otherTracks[j] = otherTracks[j], otherTracks[i]
-		})
-
-		// Fill commonTracks until we have 10 or run out
-		needed := 10 - len(commonTracks)
-		if needed > len(otherTracks) {
-			needed = len(otherTracks)
-		}
-		commonTracks = append(commonTracks, otherTracks[:needed]...)
-	}
-
-	if len(commonTracks) == 0 {
+	if len(weightedPool) == 0 {
 		return nil
 	}
 
-	// Select random track
-	selectedID := commonTracks[rand.Intn(len(commonTracks))]
+	// Select random track from weighted pool
+	selectedID := weightedPool[rand.Intn(len(weightedPool))]
 	return trackMap[selectedID]
 }
 
@@ -491,8 +524,10 @@ func (r *GameRoom) calculateRoundResults() *RoundResult {
 		)
 	})
 
-	// Award points
+	// Award points and calculate durations
 	pointsAwarded := make(map[string]int)
+	guessDurations := make(map[string]float64)
+	
 	for idx, playerID := range correctGuessers {
 		basePoints := 10
 		speedBonus := 0
@@ -503,6 +538,10 @@ func (r *GameRoom) calculateRoundResults() *RoundResult {
 		total := basePoints + speedBonus
 		pointsAwarded[playerID] = total
 		r.Scores[playerID] += total
+		
+		// Calculate duration
+		duration := r.Guesses[playerID].Timestamp.Sub(r.RoundStartTime).Seconds()
+		guessDurations[playerID] = duration
 	}
 
 	return &RoundResult{
@@ -514,6 +553,7 @@ func (r *GameRoom) calculateRoundResults() *RoundResult {
 		PointsAwarded:   pointsAwarded,
 		AllRankings:     allRankings,
 		UpdatedScores:   r.Scores,
+		GuessDurations:  guessDurations,
 	}
 }
 
@@ -534,10 +574,11 @@ func (r *GameRoom) getPlayerInfoList() []PlayerInfo {
 	for _, id := range r.PlayerOrder {
 		if player, exists := r.Players[id]; exists {
 			players = append(players, PlayerInfo{
-				ID:      player.ID,
-				Name:    player.Name,
-				Score:   r.Scores[player.ID],
-				IsReady: player.IsReady,
+				ID:       player.ID,
+				Name:     player.Name,
+				Score:    r.Scores[player.ID],
+				IsReady:  player.IsReady,
+				IsLeader: player.IsLeader,
 			})
 		}
 	}

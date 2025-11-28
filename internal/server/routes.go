@@ -141,7 +141,7 @@ func (s *Server) HandleSpotifyCallback(c *gin.Context) {
 
 	frontendURL := os.Getenv("FRONTEND_URL")
 	if frontendURL == "" {
-		frontendURL = "http://localhost:5173"
+		frontendURL = "http://127.0.0.1:5173"
 	}
 
 	c.Redirect(http.StatusTemporaryRedirect, frontendURL+"/?auth=success")

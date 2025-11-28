@@ -11,6 +11,7 @@ interface PlayerInfo {
   name: string
   score: number
   is_ready: boolean
+  is_leader: boolean
 }
 
 interface Track {
@@ -36,6 +37,7 @@ interface RoundResult {
   points_awarded: Record<string, number>
   all_rankings: Record<string, number>
   updated_scores: Record<string, number>
+  guess_durations: Record<string, number>
 }
 
 export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps) {
@@ -46,6 +48,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
   const [gameState, setGameState] = useState<'waiting' | 'playing' | 'round_end' | 'game_over'>('waiting')
   const [currentRound, setCurrentRound] = useState(0)
   const [totalRounds, setTotalRounds] = useState(10)
+  const [roundsInput, setRoundsInput] = useState(10)
   const [isReady, setIsReady] = useState(false)
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null)
   const [hasGuessed, setHasGuessed] = useState(false)
@@ -53,9 +56,23 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
   const [roundResult, setRoundResult] = useState<RoundResult | null>(null)
   const [timeRemaining, setTimeRemaining] = useState(30)
   const [isStarting, setIsStarting] = useState(false)
+  const [volume, setVolume] = useState(() => {
+    const saved = localStorage.getItem('spotify_guesser_volume')
+    return saved ? parseFloat(saved) : 0.7
+  })
   const audioRef = useRef<HTMLAudioElement>(null)
   const [audioError, setAudioError] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const currentPlayer = players.find(p => p.id === player.id)
+  const isLeader = currentPlayer?.is_leader || false
+
+  useEffect(() => {
+    localStorage.setItem('spotify_guesser_volume', volume.toString())
+    if (audioRef.current) {
+      audioRef.current.volume = volume
+    }
+  }, [volume])
 
   useEffect(() => {
     if (hasConnected.current) return
@@ -116,7 +133,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
           
           if (message.payload.track.preview_url && audioRef.current) {
             audioRef.current.src = message.payload.track.preview_url
-            audioRef.current.volume = 0.7
+            audioRef.current.volume = volume
             audioRef.current.play().catch(() => {
               setAudioError('Failed to play audio preview')
             })
@@ -130,6 +147,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
         case 'round_complete':
           setGameState('round_end')
           setRoundResult(message.payload)
+          setTimeRemaining(5) // 5 second countdown for next round
           setPlayers(prev => prev.map(p => ({
             ...p,
             score: message.payload.updated_scores[p.id] || 0
@@ -146,6 +164,16 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
             ...p,
             score: message.payload.final_scores[p.id] || 0
           })))
+          break
+
+        case 'game_reset':
+          setGameState('waiting')
+          setPlayers(message.payload.players || [])
+          setIsReady(false)
+          setIsStarting(false)
+          setRoundResult(null)
+          setGuessesCount(0)
+          setHasGuessed(false)
           break
 
         case 'error':
@@ -173,10 +201,10 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
         websocket.close()
       }
     }
-  }, [roomId, player])
+  }, [roomId, player, volume])
 
   useEffect(() => {
-    if (gameState === 'playing' && timeRemaining > 0) {
+    if ((gameState === 'playing' || gameState === 'round_end') && timeRemaining > 0) {
       const timer = setTimeout(() => {
         setTimeRemaining(timeRemaining - 1)
       }, 1000)
@@ -191,7 +219,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
         type: 'start_game',
         payload: {
           room_id: roomId,
-          total_rounds: 10,
+          total_rounds: roundsInput,
         },
       }))
     }
@@ -247,7 +275,11 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
   }
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score)
-  const isWinner = gameState === 'game_over' && sortedPlayers[0]?.id === player.id
+  const maxScore = players.length > 0 ? Math.max(...players.map(p => p.score)) : 0
+  const isWinner = gameState === 'game_over' && (currentPlayer?.score || 0) === maxScore && maxScore > 0
+
+  // Calculate unique scores for ranking
+  const uniqueScores = [...new Set(players.map(p => p.score))].sort((a, b) => b - a)
 
   return (
       <>
@@ -317,21 +349,48 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                 </div>
 
                 {players.length >= 2 ? (
-                  <button
-                    onClick={handleStartGame}
-                    disabled={isStarting || !players.every(p => p.is_ready)}
-                    className={`w-full font-bold py-4 px-6 rounded-full transition-all transform shadow-lg text-lg ${
-                      isStarting || !players.every(p => p.is_ready)
-                        ? 'bg-gray-600 cursor-not-allowed opacity-50' 
-                        : 'bg-spotify-green hover:bg-[#1ed760] text-black hover:scale-105 hover:shadow-[0_0_20px_rgba(29,185,84,0.4)]'
-                    }`}
-                  >
-                    {isStarting 
-                      ? 'Starting Game...' 
-                      : !players.every(p => p.is_ready)
-                        ? 'Waiting for players to ready up...'
-                        : `Start Game (${players.length} players)`}
-                  </button>
+                  isLeader ? (
+                    <div className="space-y-4 w-full max-w-md mx-auto">
+                      <div className="bg-white/10 p-4 rounded-xl">
+                        <label className="block text-sm font-bold text-gray-300 mb-2">
+                          Number of Rounds
+                        </label>
+                        <div className="flex items-center justify-center gap-4">
+                          <input
+                            type="range"
+                            min="1"
+                            max="20"
+                            value={roundsInput}
+                            onChange={(e) => setRoundsInput(parseInt(e.target.value))}
+                            className="w-full accent-spotify-green"
+                          />
+                          <span className="text-2xl font-bold text-white w-12">{roundsInput}</span>
+                        </div>
+                      </div>
+                      
+                      <button
+                        onClick={handleStartGame}
+                        disabled={isStarting || !players.every(p => p.is_ready)}
+                        className={`w-full font-bold py-4 px-6 rounded-full transition-all transform shadow-lg text-lg ${
+                          isStarting || !players.every(p => p.is_ready)
+                            ? 'bg-gray-600 cursor-not-allowed opacity-50' 
+                            : 'bg-spotify-green hover:bg-[#1ed760] text-black hover:scale-105 hover:shadow-[0_0_20px_rgba(29,185,84,0.4)]'
+                        }`}
+                      >
+                        {isStarting 
+                          ? 'Starting Game...' 
+                          : !players.every(p => p.is_ready)
+                            ? 'Waiting for players to ready up...'
+                            : `Start Game (${players.length} players)`}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-6 animate-pulse">
+                      <p className="text-blue-200 text-lg font-semibold">
+                        Waiting for leader to start the game...
+                      </p>
+                    </div>
+                  )
                 ) : (
                   <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-4 inline-block">
                     <p className="text-yellow-200">
@@ -405,10 +464,12 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                     min="0"
                     max="1"
                     step="0.1"
-                    defaultValue="0.7"
+                    value={volume}
                     onChange={(e) => {
+                      const newVolume = parseFloat(e.target.value)
+                      setVolume(newVolume)
                       if (audioRef.current) {
-                        audioRef.current.volume = parseFloat(e.target.value)
+                        audioRef.current.volume = newVolume
                       }
                     }}
                     className="w-32 accent-spotify-green"
@@ -506,9 +567,18 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                     <h3 className="font-bold text-gray-300 uppercase tracking-wider text-sm mb-4">Correct Guesses</h3>
                     {roundResult.correct_guessers.map((pid: string, idx: number) => (
                       <div key={pid} className="bg-spotify-green/10 border border-spotify-green/20 rounded-xl p-4 flex justify-between items-center">
-                        <span className="font-bold text-white">
-                          {players.find(p => p.id === pid)?.name}
-                        </span>
+                        <div className="flex items-center gap-3">
+                          <div className="text-left">
+                            <span className="font-bold text-white block">
+                              {players.find(p => p.id === pid)?.name}
+                            </span>
+                            {roundResult.guess_durations && roundResult.guess_durations[pid] && (
+                              <span className="text-xs text-gray-400">
+                                {roundResult.guess_durations[pid].toFixed(2)}s
+                              </span>
+                            )}
+                          </div>
+                        </div>
                         <span className="text-spotify-green font-bold flex items-center gap-2">
                           +{roundResult.points_awarded[pid]} pts
                           {idx === 0 && <span className="text-yellow-400 text-xs bg-yellow-400/10 px-2 py-1 rounded">⚡ FASTEST</span>}
@@ -523,7 +593,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                 )}
 
                 <div className="text-gray-500 animate-pulse">
-                  Next round starting soon...
+                  Next round in {timeRemaining}s...
                 </div>
               </div>
             )}
@@ -572,40 +642,63 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
                     Final Standings
                   </h3>
                   <div className="space-y-3">
-                    {sortedPlayers.map((p, idx) => (
-                      <div
-                        key={p.id}
-                        className={`flex justify-between items-center p-4 rounded-xl transition-all ${
-                          idx === 0
-                            ? 'bg-linear-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500/50 transform scale-105 shadow-lg'
-                            : p.id === player.id
-                            ? 'bg-white/10 border border-white/30'
-                            : 'bg-white/5 border border-white/5'
-                        }`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <span className={`text-2xl font-bold w-8 ${idx === 0 ? 'text-yellow-400' : 'text-gray-500'}`}>
-                            {idx === 0 ? '1' : idx + 1}
-                          </span>
-                          <div className="text-left">
-                            <p className={`font-bold ${idx === 0 ? 'text-yellow-200' : 'text-white'}`}>
-                              {p.name} {p.id === player.id && '(You)'}
-                            </p>
-                            {idx === 0 && <span className="text-xs text-yellow-500/80 uppercase font-bold">Winner</span>}
+                    {sortedPlayers.map((p) => {
+                      const rankIndex = uniqueScores.indexOf(p.score)
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex justify-between items-center p-4 rounded-xl transition-all ${
+                            rankIndex === 0
+                              ? 'bg-linear-to-r from-yellow-500/20 to-yellow-600/20 border border-yellow-500/50 transform scale-105 shadow-lg'
+                              : p.id === player.id
+                              ? 'bg-white/10 border border-white/30'
+                              : 'bg-white/5 border border-white/5'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <span className={`text-2xl font-bold w-8 ${rankIndex === 0 ? 'text-yellow-400' : 'text-gray-500'}`}>
+                              {rankIndex === 0 ? '🥇' : rankIndex === 1 ? '🥈' : rankIndex === 2 ? '🥉' : rankIndex + 1}
+                            </span>
+                            <div className="text-left">
+                              <p className={`font-bold ${rankIndex === 0 ? 'text-yellow-200' : 'text-white'}`}>
+                                {p.name} {p.id === player.id && '(You)'}
+                              </p>
+                              {rankIndex === 0 && <span className="text-xs text-yellow-500/80 uppercase font-bold">Winner</span>}
+                            </div>
                           </div>
+                          <span className="text-2xl font-bold text-white">{p.score}</span>
                         </div>
-                        <span className="text-2xl font-bold text-white">{p.score}</span>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
 
-                <button
-                  onClick={handleLeave}
-                  className="w-full mt-12 glass-button hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl transition-all"
-                >
-                  Back to Lobby
-                </button>
+                <div className="flex flex-col gap-4 mt-12">
+                  <button
+                    onClick={() => {
+                      setGameState('waiting')
+                      setPlayers(prev => prev.map(p => ({ ...p, score: 0, is_ready: false })))
+                      setIsReady(false)
+                      // Send ready false to server just in case
+                      if (wsRef.current) {
+                        wsRef.current.send(JSON.stringify({
+                          type: 'ready',
+                          payload: { is_ready: false }
+                        }))
+                      }
+                    }}
+                    className="w-full glass-button bg-spotify-green/20 hover:bg-spotify-green/40 text-spotify-green font-bold py-4 px-6 rounded-xl transition-all border border-spotify-green/50"
+                  >
+                    Play Again
+                  </button>
+                  
+                  <button
+                    onClick={handleLeave}
+                    className="w-full glass-button hover:bg-white/10 text-white font-bold py-4 px-6 rounded-xl transition-all"
+                  >
+                    Back to Lobby
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -615,7 +708,7 @@ export default function GameRoom({ roomId, player, onLeaveRoom }: GameRoomProps)
               <span>👥</span> Players
             </h3>
             <div className="space-y-3">
-              {players.map((p) => (
+              {[...players].sort((a, b) => b.score - a.score).map((p) => (
                 <div
                   key={p.id}
                   className={`flex justify-between items-center p-3 rounded-lg transition-all ${

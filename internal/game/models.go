@@ -14,6 +14,7 @@ type Player struct {
 	Connection *websocket.Conn
 	JoinedAt   time.Time
 	IsReady    bool
+	IsLeader   bool
 }
 
 // GameState represents the current state of the game
@@ -46,6 +47,7 @@ const (
 	MsgTypeGuessReceived  MessageType = "guess_received"
 	MsgTypeRoundComplete  MessageType = "round_complete"
 	MsgTypeGameOver       MessageType = "game_over"
+	MsgTypeGameReset      MessageType = "game_reset"
 	MsgTypeError          MessageType = "error"
 )
 
@@ -99,12 +101,14 @@ type RoundResult struct {
 	PointsAwarded   map[string]int         `json:"points_awarded"`
 	AllRankings     map[string]int         `json:"all_rankings"`
 	UpdatedScores   map[string]int         `json:"updated_scores"`
+	GuessDurations  map[string]float64     `json:"guess_durations"`
 }
 
 // PlayerInfo for client-side display
 type PlayerInfo struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Score   int    `json:"score"`
-	IsReady bool   `json:"is_ready"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Score    int    `json:"score"`
+	IsReady  bool   `json:"is_ready"`
+	IsLeader bool   `json:"is_leader"`
 }
